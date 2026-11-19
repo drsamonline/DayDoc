@@ -114,7 +114,15 @@ pub fn domain_of(note: &Note) -> Option<String> {
         if tld.len() < 2 || !tld.chars().all(|c| c.is_ascii_alphabetic()) {
             continue;
         }
-        let candidate = labels[labels.len() - 2..].join(".");
+        // Keep a second-level suffix with the name: acme.co.in, not co.in.
+        let mut take = 2usize;
+        if labels.len() >= 3 {
+            let sld = labels[labels.len() - 2];
+            if matches!(sld, "co" | "com" | "org" | "net" | "ac" | "gov" | "edu" | "or" | "ne") {
+                take = 3;
+            }
+        }
+        let candidate = labels[labels.len() - take..].join(".");
         if NOISE_DOMAINS.contains(&candidate.as_str()) {
             continue;
         }

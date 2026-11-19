@@ -61,7 +61,10 @@ impl Sandbox {
 }
 
 fn assert_contains(haystack: &str, needle: &str) {
-    assert!(haystack.contains(needle), "expected {needle:?} in:\n{haystack}");
+    assert!(
+        haystack.contains(needle),
+        "expected {needle:?} in:\n{haystack}"
+    );
 }
 
 #[test]
