@@ -82,6 +82,11 @@ History is never edited.
 - **Search that returns cards.** `ask` gives you the decision, its status, its
   owner, what it replaced, what it is cited by — not a paragraph to re-read.
 - **Handover packet, wrap and weekly digest.** Markdown only.
+- **Import with a dry-run preview.** Point it at an Obsidian, Logseq or plain
+  folder: paths are preserved, missing ids are assigned, missing types are
+  classified, nothing is overwritten.
+- **Project auto-clustering.** Five or more notes in seven days sharing a client
+  domain or a person propose a project folder. Accepting files the members.
 
 An optional LLM (BYOK or a local server) adds abstractive summaries and chat.
 It is off by default, there is no download prompt, and no feature above needs
@@ -116,6 +121,10 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+import      import an existing Markdown folder (dry-run preview)
+cluster     propose project folders from notes that cluster
+attach      store a file content-addressed under assets/
+purge       delete trash past the retention window
 handover    compile a handover packet
 wrap        end-of-day wrap
 digest      weekly digest
@@ -142,6 +151,9 @@ and self-update. See `docs/ROADMAP.md`.
 
 ```
 src/
+  migrate.rs      import an existing Markdown folder
+  cluster.rs      project auto-clustering (Tier 0)
+  attach.rs       content-addressed attachments
   vault.rs        write-ahead log, atomic commit, path safety, trash, audit
   frontmatter.rs  YAML read/write, unknown keys preserved
   note.rs         note model, section helpers

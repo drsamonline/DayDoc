@@ -210,3 +210,65 @@ fn vault_is_plain_markdown_on_disk() {
         let _ = Path::new(&path);
     }
 }
+
+#[test]
+fn import_previews_then_imports() {
+    let sandbox = Sandbox::new("import");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+
+    let source = sandbox.root.join("source");
+    std::fs::create_dir_all(source.join("notes")).expect("source dirs");
+    std::fs::write(
+        source.join("notes/old.md"),
+        "We decided to adopt Okta for SSO across all products.\n",
+    )
+    .expect("write source");
+
+    let out = sandbox.ok(&["import", source.to_str().unwrap(), "--dry-run"]);
+    assert_contains(&out, "to import");
+    assert!(!sandbox.exists("notes/old.md"));
+
+    let out = sandbox.ok(&["import", source.to_str().unwrap()]);
+    assert_contains(&out, "imported");
+    let imported = sandbox.read("notes/old.md");
+    assert_contains(&imported, "type: decision");
+    assert_contains(&imported, "id: ");
+
+    // The source folder is untouched.
+    assert!(source.join("notes/old.md").exists());
+}
+
+#[test]
+fn attach_is_content_addressed_and_deduplicated() {
+    let sandbox = Sandbox::new("attach");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+
+    let file = sandbox.root.join("diagram.png");
+    std::fs::write(&file, b"not really a png").expect("write file");
+
+    let first = sandbox.ok(&["attach", file.to_str().unwrap()]);
+    assert_contains(&first, "assets/");
+    assert!(!first.contains("already present"));
+
+    let second = sandbox.ok(&["attach", file.to_str().unwrap()]);
+    assert_contains(&second, "already present");
+}
+
+#[test]
+fn read_only_flag_blocks_writes() {
+    let sandbox = Sandbox::new("ro-flag");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let output = Command::new(env!("CARGO_BIN_EXE_daydoc"))
+        .env("DAYDOC_HOME", sandbox.state())
+        .args([
+            "-v",
+            sandbox.vault().to_str().unwrap(),
+            "--read-only-vault",
+            "capture",
+            "we decided to ship on friday",
+        ])
+        .output()
+        .expect("run");
+    assert!(!output.status.success());
+    assert!(!sandbox.exists("decisions/DR-0001.md"));
+}

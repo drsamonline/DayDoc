@@ -11,8 +11,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_debug_implementations)]
 
+pub mod attach;
 pub mod capture;
 pub mod classify;
+pub mod cluster;
 pub mod config;
 pub mod daily;
 pub mod error;
@@ -21,6 +23,7 @@ pub mod handover;
 pub mod ids;
 pub mod ledger;
 pub mod meeting;
+pub mod migrate;
 pub mod note;
 pub mod search;
 pub mod sop;

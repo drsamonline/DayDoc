@@ -226,6 +226,14 @@ impl Vault {
         Ok(target)
     }
 
+    /// Write raw bytes through the same path (attachments are not text).
+    pub fn write_bytes(&self, rel: &str, bytes: &[u8]) -> Result<PathBuf> {
+        self.ensure_writable(rel)?;
+        let target = self.abs(rel)?;
+        atomic_write(&target, bytes)?;
+        Ok(target)
+    }
+
     /// Write a new file, refusing to clobber an existing note.
     pub fn create(&self, rel: &str, content: &str) -> Result<PathBuf> {
         if self.exists(rel) {

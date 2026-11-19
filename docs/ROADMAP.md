@@ -12,6 +12,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - SOP proposals: ordered n-gram matching, union-find clustering
 - Staleness: age by type + contradiction, three resolutions
 - Search: fuzzy, filtered, decision cards, time-anchored `ask`
+- Import of an existing Markdown folder, with dry-run preview
+- Project auto-clustering from shared client domain or person
+- Content-addressed attachments under `assets/`
 - TextRank summaries, handover packet, EOD wrap, weekly digest
 - CLI over the whole surface, end-to-end tests
 
@@ -26,15 +29,14 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    and the re-verify entry point.
 3. **Watcher.** `notify-debouncer-full` re-index on external edits (VS Code,
    Obsidian), with the Windows lock retry already in `vault`.
-4. **Attachments.** Content-addressed at `assets/<hash2>/<blake3>.<ext>`.
-5. **Git sync.** `git2`, batched auto-commit every 300 s, commit only, push
+4. **Git sync.** `git2`, batched auto-commit every 300 s, commit only, push
    through the user's own credential helper, `.conflict.md` sidecars, never
    auto-merged.
-6. **Backup.** Daily `.tar.gz` of the vault, 7/4/6 retention, optional
+5. **Backup.** Daily `.tar.gz` of the vault, 7/4/6 retention, optional
    AES-256-GCM with the key in the OS keychain and fail-closed when the keychain
    is unavailable.
-7. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
-8. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
+6. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
+7. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.
 
 ## Explicitly out of scope

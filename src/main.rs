@@ -7,7 +7,9 @@ use argh::FromArgs;
 
 use daydoc::error::DayDocError;
 use daydoc::types::{DecisionStatus, NoteType};
-use daydoc::{capture, daily, handover, ledger, meeting, search, sop, stale, Vault};
+use daydoc::{
+    attach, capture, cluster, daily, handover, ledger, meeting, migrate, search, sop, stale, Vault,
+};
 
 #[derive(FromArgs, Debug)]
 /// decision-first office notes (DayDoc)
@@ -15,6 +17,9 @@ struct TopLevel {
     #[argh(option, short = 'v')]
     /// vault root (default: $DAYDOC_VAULT, then the current directory)
     vault: Option<String>,
+    #[argh(switch)]
+    /// open the vault read-only for this run
+    read_only_vault: bool,
     #[argh(subcommand)]
     cmd: Sub,
 }
@@ -40,6 +45,10 @@ enum Sub {
     Wrap(WrapCmd),
     Digest(DigestCmd),
     Sop(SopCmd),
+    Import(ImportCmd),
+    Cluster(ClusterCmd),
+    Attach(AttachCmd),
+    Purge(PurgeCmd),
     Replay(ReplayCmd),
     Status(StatusCmd),
 }
@@ -260,6 +269,47 @@ struct SopCmd {
 }
 
 #[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "import")]
+/// import an existing Markdown folder, with a dry-run preview
+struct ImportCmd {
+    #[argh(positional)]
+    /// folder of Markdown files to import
+    path: String,
+    #[argh(switch)]
+    /// show what would happen, write nothing
+    dry_run: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "cluster")]
+/// propose project folders from notes that already look like one project
+struct ClusterCmd {
+    #[argh(switch)]
+    /// accept a proposal instead of listing
+    accept: bool,
+    #[argh(option)]
+    /// proposal number to accept, 1-based
+    index: Option<usize>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "attach")]
+/// store a file content-addressed under assets/, optionally linking it from a note
+struct AttachCmd {
+    #[argh(positional)]
+    /// file to store
+    file: String,
+    #[argh(option)]
+    /// vault-relative note to reference the file from
+    note: Option<String>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "purge")]
+/// delete trash entries past the retention window
+struct PurgeCmd {}
+
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "replay")]
 /// replay staged writes left behind by a crash
 struct ReplayCmd {}
@@ -280,12 +330,15 @@ fn main() -> ExitCode {
     }
 }
 
-fn open_vault(explicit: Option<String>) -> daydoc::Result<Vault> {
+fn open_vault(explicit: Option<String>, read_only: bool) -> daydoc::Result<Vault> {
     let root = explicit
         .or_else(|| std::env::var("DAYDOC_VAULT").ok())
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let vault = Vault::open(&root)?;
+    let mut vault = Vault::open(&root)?;
+    if read_only {
+        vault.config_mut().read_only_vault = true;
+    }
     for warning in vault.replay_wal()? {
         eprintln!("daydoc: {warning}");
     }
@@ -328,6 +381,7 @@ fn today_or(raw: Option<String>) -> String {
 
 fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
     let explicit = args.vault.clone();
+    let read_only = args.read_only_vault;
     match args.cmd {
         Sub::Init(cmd) => {
             let vault = Vault::init(&PathBuf::from(&cmd.path))?;
@@ -337,7 +391,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Capture(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let raw = match (cmd.input, cmd.text) {
                 (Some(input), _) => input,
                 (None, Some(text)) => text,
@@ -368,7 +422,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Meeting(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let raw = read_text(&cmd.file)?;
             // A meeting note keeps its frontmatter; a raw transcript has none.
             let text = match daydoc::frontmatter::split(&raw) {
@@ -428,7 +482,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Decisions(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let wanted = match cmd.status.as_deref() {
                 Some(raw) => Some(DecisionStatus::parse(raw).ok_or_else(|| {
                     DayDocError::Config(format!("unknown status \"{raw}\""))
@@ -453,7 +507,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Show(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let note = ledger::find(&vault, &cmd.reference)?;
             let citations = ledger::citation_counts(&vault)?;
             let card = ledger::card(&note, &citations);
@@ -465,7 +519,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Accept(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let note = ledger::accept(&vault, &cmd.reference)?;
             println!(
                 "{} is now {}",
@@ -476,7 +530,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Reject(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let note = ledger::reject(&vault, &cmd.reference)?;
             println!(
                 "{} is now {}",
@@ -487,7 +541,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Supersede(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let mut request = ledger::NewDecision::new(cmd.title.clone());
             if let Some(decision) = &cmd.decision {
                 request.decision = decision.clone();
@@ -506,7 +560,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Revert(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let reason = cmd.reason.unwrap_or_else(|| "not given".to_string());
             let (new, old) = ledger::revert_supersession(&vault, &cmd.reference, &reason)?;
             println!(
@@ -518,7 +572,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Search(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let mut filters = search::Filters::default();
             if let Some(kind) = cmd.kind.as_deref() {
                 filters.note_type = Some(parse_kind(kind)?);
@@ -538,7 +592,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Ask(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let cards = search::ask(&vault, &cmd.question)?;
             if cards.is_empty() {
                 println!("nothing in the ledger answers that");
@@ -552,7 +606,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Stale(_) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let flags = stale::scan(&vault)?;
             if flags.is_empty() {
                 println!("nothing is stale");
@@ -567,7 +621,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Verify(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let note = stale::reverify(&vault, &cmd.path)?;
             println!(
                 "re-verified {} ({})",
@@ -578,14 +632,14 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Archive(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let dest = stale::archive(&vault, &cmd.path)?;
             println!("archived to {dest}");
             Ok(ExitCode::SUCCESS)
         }
 
         Sub::Handover(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let to = today_or(cmd.to);
             let from = cmd.from.unwrap_or_else(|| {
                 let date = chrono::Local::now().date_naive() - chrono::Duration::days(14);
@@ -602,7 +656,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Wrap(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let date = today_or(cmd.date);
             if cmd.dry_run {
                 print!("{}", daily::eod_wrap(&vault, &date)?);
@@ -614,7 +668,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Digest(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let date = today_or(cmd.date);
             if cmd.dry_run {
                 let (_, md) = daily::weekly_digest(&vault, &date)?;
@@ -627,7 +681,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Sop(cmd) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let proposals = sop::propose(&vault)?;
             if proposals.is_empty() {
                 println!("no repeated procedures found (3+ notes must share a sequence)");
@@ -652,8 +706,81 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
+        Sub::Import(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let source = PathBuf::from(&cmd.path);
+            let report = if cmd.dry_run {
+                migrate::preview(&vault, &source)?
+            } else {
+                migrate::run(&vault, &source)?
+            };
+            print!("{}", report.render());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Cluster(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let proposals = cluster::propose(&vault)?;
+            if proposals.is_empty() {
+                println!(
+                    "no project clusters: {} or more notes within {} days must share a client domain or a person",
+                    cluster::MIN_NOTES,
+                    cluster::WINDOW_DAYS
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
+            if !cmd.accept {
+                for (i, proposal) in proposals.iter().enumerate() {
+                    println!("{}. {}", i + 1, proposal.render());
+                }
+                println!("accept one with: daydoc cluster --accept --index 1");
+                return Ok(ExitCode::SUCCESS);
+            }
+            let index = cmd.index.unwrap_or(1);
+            if index == 0 || index > proposals.len() {
+                return Err(DayDocError::Config(format!(
+                    "proposal {index} is out of range (1..{})",
+                    proposals.len()
+                )));
+            }
+            let note = cluster::accept(&vault, &proposals[index - 1])?;
+            println!("wrote {}", note.rel_path);
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Attach(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let source = PathBuf::from(&cmd.file);
+            match cmd.note {
+                Some(note_rel) => {
+                    let (attachment, _) = attach::attach_to(&vault, &note_rel, &source)?;
+                    println!("{} linked from {}", attachment.rel_path, note_rel);
+                }
+                None => {
+                    let attachment = attach::store(&vault, &source)?;
+                    let note = if attachment.deduplicated {
+                        " (already present)"
+                    } else {
+                        ""
+                    };
+                    println!("{}  {} bytes{}", attachment.rel_path, attachment.bytes, note);
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Purge(_) => {
+            let vault = open_vault(explicit, read_only)?;
+            let removed = vault.purge_trash()?;
+            println!(
+                "purged {removed} file(s) past the {} day retention window",
+                vault.config().trash_retention_days
+            );
+            Ok(ExitCode::SUCCESS)
+        }
+
         Sub::Replay(_) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let warnings = vault.replay_wal()?;
             if warnings.is_empty() {
                 println!("nothing staged");
@@ -665,7 +792,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         }
 
         Sub::Status(_) => {
-            let vault = open_vault(explicit)?;
+            let vault = open_vault(explicit, read_only)?;
             let scan = vault.scan()?;
             let cards = ledger::cards(&vault)?;
             let flags = stale::scan(&vault)?;
