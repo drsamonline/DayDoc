@@ -324,3 +324,29 @@ fn check_reports_stable_identities() {
     let out = sandbox.ok(&["check"]);
     assert_contains(&out, "identities stable");
 }
+
+#[test]
+fn lint_reports_a_missing_id_and_reindex_rebuilds() {
+    let sandbox = Sandbox::new("lint");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    std::fs::write(
+        sandbox.vault().join("inbox/noid.md"),
+        "---\ntype: idea\ntitle: No id\n---\nbody\n",
+    )
+    .expect("write note");
+
+    let out = sandbox.ok(&["lint"]);
+    assert_contains(&out, "missing-id");
+
+    let out = sandbox.ok(&["lint", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("lint json");
+    assert!(parsed.as_array().map(|a| !a.is_empty()).unwrap_or(false));
+
+    let out = sandbox.ok(&["reindex"]);
+    assert_contains(&out, "indexed");
+
+    // Search still works after the index is built.
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    let out = sandbox.ok(&["search", "okta"]);
+    assert_contains(&out, "DR-0001");
+}

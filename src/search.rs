@@ -196,11 +196,32 @@ fn excerpt_for(note: &Note, tokens: &[String]) -> String {
     body.chars().take(140).collect::<String>().trim().to_string()
 }
 
+/// Notes to score: the full-text index when it is fresh and can match, the
+/// whole vault otherwise. A typo the index cannot match is exactly the case
+/// fuzzy scoring exists for, so a miss falls back rather than returning nothing.
+fn candidate_notes(vault: &Vault, query_tokens: &[String]) -> Result<Vec<Note>> {
+    if let Some(rels) = crate::index::candidates(vault, query_tokens) {
+        if !rels.is_empty() {
+            let mut notes = Vec::new();
+            for rel in rels {
+                if let Ok(note) = vault.load(&rel) {
+                    notes.push(note);
+                }
+            }
+            if !notes.is_empty() {
+                return Ok(notes);
+            }
+        }
+    }
+    Ok(vault.scan()?.notes)
+}
+
 /// Fuzzy search across titles, bodies, entities and tags.
 pub fn search(vault: &Vault, query: &str, filters: &Filters) -> Result<Vec<SearchHit>> {
     let query_tokens = tokens(query);
+    let notes = candidate_notes(vault, &query_tokens)?;
     let mut hits = Vec::new();
-    for note in vault.scan()?.notes {
+    for note in notes {
         if !filters.matches(&note) {
             continue;
         }

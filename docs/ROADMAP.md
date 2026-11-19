@@ -12,6 +12,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - SOP proposals: ordered n-gram matching, union-find clustering
 - Staleness: age by type + contradiction, three resolutions
 - Search: fuzzy, filtered, decision cards, time-anchored `ask`
+- SQLite FTS5 index with self-healing rebuild; search falls back to fuzzy scan
+- Lint: ids, types, citations, links, attachments
 - Backup: dated `.tar.gz` of the vault, 7/4/6 retention, fail-closed on encryption
 - Identity guard: changed `id` is a new note, warned into `_meta/warnings/`
 - `--json` output for decisions, search, stale and status
@@ -23,10 +25,10 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 
 ## Next
 
-1. **Index and embeddings.** Move search onto a SQLite FTS + `sqlite-vec`
-   index; bundle all-MiniLM-L6-v2 INT4 (~11 MB) and bert-tiny-NER INT4
-   (~2.2 MB) through `rten`, zstd-compressed, decompressed at load. Auto-link
-   suggestions (never auto-accepted) and fuzzy SOP step matching ride on it.
+1. **Embeddings.** Add `sqlite-vec` alongside the FTS5 table; bundle
+   all-MiniLM-L6-v2 INT4 (~11 MB) and bert-tiny-NER INT4 (~2.2 MB) through
+   `rten`, zstd-compressed, decompressed at load. Auto-link suggestions (never
+   auto-accepted) and fuzzy SOP step matching ride on it.
 2. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
    `Ctrl+Shift+K`, morning plan on `Ctrl+Shift+M`, tray badge for stale notes
    and the re-verify entry point.

@@ -8,8 +8,8 @@ use argh::FromArgs;
 use daydoc::error::DayDocError;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, daily, handover, index, ledger, meeting, migrate, search, sop,
-    stale, Vault,
+    attach, backup, capture, cluster, daily, handover, index, ledger, lint, meeting, migrate, search,
+    sop, stale, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -49,6 +49,8 @@ enum Sub {
     Backup(BackupCmd),
     Check(CheckCmd),
     Import(ImportCmd),
+    Lint(LintCmd),
+    Reindex(ReindexCmd),
     Cluster(ClusterCmd),
     Attach(AttachCmd),
     Purge(PurgeCmd),
@@ -282,6 +284,20 @@ struct SopCmd {
 }
 
 #[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "lint")]
+/// report vault problems: ids, links, citations, assets
+struct LintCmd {
+    #[argh(switch)]
+    /// print json instead of lines
+    json: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "reindex")]
+/// rebuild the search index from the vault
+struct ReindexCmd {}
+
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "backup")]
 /// write a dated .tar.gz of the vault and apply retention
 struct BackupCmd {
@@ -376,6 +392,9 @@ fn open_vault(explicit: Option<String>, read_only: bool) -> daydoc::Result<Vault
     for warning in vault.replay_wal()? {
         eprintln!("daydoc: {warning}");
     }
+    // The index is an optimisation, never a source of truth: refresh it when it
+    // disagrees with the vault and carry on if it cannot be built.
+    let _ = index::ensure(&vault);
     Ok(vault)
 }
 
@@ -754,6 +773,31 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             }
             let note = sop::accept(&vault, &proposals[index - 1])?;
             println!("wrote {}", note.rel_path);
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Lint(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let issues = lint::scan(&vault)?;
+            if cmd.json {
+                print_json(&issues);
+                return Ok(ExitCode::SUCCESS);
+            }
+            if issues.is_empty() {
+                println!("vault is clean");
+                return Ok(ExitCode::SUCCESS);
+            }
+            for issue in &issues {
+                print!("{}", issue.render());
+            }
+            println!("\n{} issue(s)", issues.len());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Reindex(_) => {
+            let vault = open_vault(explicit, read_only)?;
+            let report = index::reindex(&vault)?;
+            print!("{}", report.render());
             Ok(ExitCode::SUCCESS)
         }
 

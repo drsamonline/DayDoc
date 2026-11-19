@@ -92,7 +92,12 @@ History is never edited.
   vault they protect.
 - **Identity guard.** Change a note's `id` and the file is a new note: the old
   id stays in the index and a warning lands in `_meta/warnings/`.
-- **`--json` on `decisions`, `search`, `stale` and `status`** for scripting.
+- **`--json` on `decisions`, `search`, `stale`, `status` and `lint`.**
+- **An index that heals itself.** Metadata and a SQLite FTS5 table live outside
+  the vault; on open, a disagreeing index is rebuilt. Search uses it when it can
+  match and falls back to a fuzzy scan when a query is a typo.
+- **Lint.** Missing and duplicate ids, unknown types, citations of decisions
+  that do not exist, broken `links:`, missing and orphaned attachments.
 
 An optional LLM (BYOK or a local server) adds abstractive summaries and chat.
 It is off by default, there is no download prompt, and no feature above needs
@@ -127,6 +132,8 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+lint        report vault problems: ids, links, citations, assets
+reindex     rebuild the search index from the vault
 backup      write a dated .tar.gz and apply 7/4/6 retention
 check       identity check plus trash purge
 import      import an existing Markdown folder (dry-run preview)
@@ -159,6 +166,8 @@ and self-update. See `docs/ROADMAP.md`.
 
 ```
 src/
+  index.rs        SQLite metadata + FTS5 index, note identity guard
+  lint.rs         vault health checks
   migrate.rs      import an existing Markdown folder
   cluster.rs      project auto-clustering (Tier 0)
   attach.rs       content-addressed attachments

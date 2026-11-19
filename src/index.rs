@@ -5,10 +5,11 @@
 //! note is not re-linked, and the change is reported into `_meta/warnings/`
 //! rather than silently rewriting the past.
 
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::error::{DayDocError, Result};
 use crate::ids;
+use crate::note::Note;
 use crate::vault::{now_iso, Vault};
 
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS note_ids (
@@ -16,6 +17,188 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS note_ids (
     id TEXT NOT NULL,
     seen_at TEXT NOT NULL
 );";
+
+/// Metadata plus a full-text index. Disposable: `reindex` rebuilds both from
+/// the vault, so a stale or missing index costs time, never truth.
+pub const FTS_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS note_meta (
+    rel_path TEXT PRIMARY KEY,
+    note_type TEXT NOT NULL,
+    status TEXT,
+    updated TEXT,
+    title TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS index_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(
+    rel_path UNINDEXED,
+    title,
+    body,
+    entities,
+    tokenize = 'unicode61 remove_diacritics 2'
+);
+";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReindexReport {
+    pub indexed: usize,
+    pub broken: usize,
+    pub identities_changed: usize,
+}
+
+impl ReindexReport {
+    pub fn render(&self) -> String {
+        format!(
+            "indexed {} note(s) · {} unreadable · {} identity change(s)\n",
+            self.indexed, self.broken, self.identities_changed
+        )
+    }
+}
+
+fn stored_file_count(conn: &Connection) -> i64 {
+    conn.query_row(
+        "SELECT value FROM index_state WHERE key = 'file_count'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .and_then(|value| value.parse().ok())
+    .unwrap_or(-1)
+}
+
+fn set_file_count(conn: &Connection, files: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO index_state (key, value) VALUES ('file_count', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![files.to_string()],
+    )
+    .map_err(DayDocError::Db)?;
+    Ok(())
+}
+
+fn entities_of(note: &Note) -> String {
+    format!(
+        "{} {} {}",
+        note.frontmatter.people.join(" "),
+        note.frontmatter.projects.join(" "),
+        note.frontmatter.tags.join(" ")
+    )
+}
+
+fn upsert_with(conn: &Connection, note: &Note) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO note_meta (rel_path, note_type, status, updated, title)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            note.rel_path,
+            note.note_type().as_str(),
+            note.frontmatter.status,
+            note.frontmatter.updated,
+            note.title()
+        ],
+    )
+    .map_err(DayDocError::Db)?;
+    conn.execute(
+        "DELETE FROM note_fts WHERE rel_path = ?1",
+        params![note.rel_path],
+    )
+    .map_err(DayDocError::Db)?;
+    conn.execute(
+        "INSERT INTO note_fts (rel_path, title, body, entities) VALUES (?1, ?2, ?3, ?4)",
+        params![note.rel_path, note.title(), note.body, entities_of(note)],
+    )
+    .map_err(DayDocError::Db)?;
+    Ok(())
+}
+
+/// Rebuild the whole index from the vault.
+pub fn reindex(vault: &Vault) -> Result<ReindexReport> {
+    let conn = vault.db()?;
+    conn.execute_batch(SCHEMA)?;
+    conn.execute_batch(FTS_SCHEMA)?;
+    conn.execute("DELETE FROM note_meta", [])
+        .map_err(DayDocError::Db)?;
+    conn.execute("DELETE FROM note_fts", [])
+        .map_err(DayDocError::Db)?;
+
+    let scan = vault.scan()?;
+    let mut report = ReindexReport {
+        broken: scan.broken.len(),
+        ..Default::default()
+    };
+    for note in &scan.notes {
+        upsert_with(&conn, note)?;
+        report.indexed += 1;
+    }
+    // Files, not notes: a file with broken frontmatter is still on disk, and the
+    // index must notice when one appears.
+    set_file_count(&conn, vault.list_rels()?.len() as i64)?;
+    report.identities_changed = check_identity(vault)?.len();
+    vault.audit(
+        "reindex",
+        &report.indexed.to_string(),
+        "notes indexed",
+    )?;
+    Ok(report)
+}
+
+/// Rebuild the index only if it disagrees with the vault. Called on open, so
+/// search is fast without a maintenance ritual.
+pub fn ensure(vault: &Vault) -> Result<Option<ReindexReport>> {
+    if vault.is_read_only() {
+        return Ok(None);
+    }
+    let conn = vault.db()?;
+    conn.execute_batch(SCHEMA)?;
+    conn.execute_batch(FTS_SCHEMA)?;
+    let files = vault.list_rels()?.len() as i64;
+    if stored_file_count(&conn) == files && files > 0 {
+        return Ok(None);
+    }
+    Ok(Some(reindex(vault)?))
+}
+
+/// Index one note after it changes. A missing index is not an error: the next
+/// `reindex` rebuilds it.
+pub fn upsert(vault: &Vault, note: &Note) -> Result<()> {
+    let conn = vault.db()?;
+    conn.execute_batch(FTS_SCHEMA)?;
+    upsert_with(&conn, note)
+}
+
+/// Candidate paths for a query, or `None` when the caller should scan instead.
+///
+/// `None` covers three honest cases: no index yet, an index that disagrees with
+/// the vault (so it is stale), and a query the full-text index cannot match —
+/// which is exactly when fuzzy matching earns its keep.
+pub fn candidates(vault: &Vault, tokens: &[String]) -> Option<Vec<String>> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let conn = vault.db().ok()?;
+    conn.execute_batch(FTS_SCHEMA).ok()?;
+    let files = vault.list_rels().ok()?.len() as i64;
+    if files == 0 || stored_file_count(&conn) != files {
+        return None;
+    }
+
+    let expression = tokens
+        .iter()
+        .map(|token| format!("{token}*"))
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    let mut statement = conn
+        .prepare("SELECT rel_path FROM note_fts WHERE note_fts MATCH ?1 LIMIT 500")
+        .ok()?;
+    let rows = statement.query_map(params![expression], |row| row.get::<_, String>(0)).ok()?;
+    let mut out = Vec::new();
+    for row in rows.flatten() {
+        out.push(row);
+    }
+    Some(out)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityChange {
@@ -112,6 +295,48 @@ pub fn check_identity(vault: &Vault) -> Result<Vec<IdentityChange>> {
 mod tests {
     use super::*;
     use crate::vault::test_support::temp_vault;
+
+    #[test]
+    fn reindex_then_candidates_find_and_miss() {
+        let vault = temp_vault();
+        vault
+            .write(
+                "inbox/a.md",
+                "---\nid: 01A\ntype: idea\ntitle: Razorpay mandate\n---\nbody about payments\n",
+            )
+            .expect("write");
+        let report = reindex(&vault).expect("reindex");
+        assert_eq!(report.indexed, 1);
+
+        let found = candidates(&vault, &["razorpay".to_string()]).expect("indexed");
+        assert_eq!(found, vec!["inbox/a.md".to_string()]);
+
+        let missing = candidates(&vault, &["kubernetes".to_string()]).expect("indexed");
+        assert!(missing.is_empty());
+
+        // A typo is a miss for the index; search falls back to a scan for it.
+        let typo = candidates(&vault, &["razorpy".to_string()]).expect("indexed");
+        assert!(typo.is_empty());
+    }
+
+    #[test]
+    fn a_stale_index_is_not_trusted() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/a.md", "---\nid: 01A\ntype: idea\ntitle: Razorpay\n---\nbody\n")
+            .expect("a");
+        reindex(&vault).expect("reindex");
+        assert!(candidates(&vault, &["razorpay".to_string()]).is_some());
+
+        vault
+            .write("inbox/b.md", "---\nid: 01B\ntype: idea\ntitle: Okta\n---\nbody\n")
+            .expect("b");
+        assert!(candidates(&vault, &["razorpay".to_string()]).is_none());
+
+        // And the self-healing path rebuilds it.
+        assert!(ensure(&vault).expect("ensure").is_some());
+        assert!(candidates(&vault, &["razorpay".to_string()]).is_some());
+    }
 
     #[test]
     fn a_stable_id_produces_no_warning() {
