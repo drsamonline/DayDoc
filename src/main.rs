@@ -10,7 +10,7 @@ use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{capture, daily, handover, ledger, meeting, search, sop, stale, Vault};
 
 #[derive(FromArgs, Debug)]
-/// DayDoc — decision-first office notes.
+/// decision-first office notes (DayDoc)
 struct TopLevel {
     #[argh(option, short = 'v')]
     /// vault root (default: $DAYDOC_VAULT, then the current directory)
@@ -46,7 +46,7 @@ enum Sub {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "init")]
-/// Create a vault in a folder. No wizard, no account.
+/// create a vault in a folder; no wizard, no account
 struct InitCmd {
     #[argh(positional)]
     /// folder to use as the vault
@@ -55,7 +55,7 @@ struct InitCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "capture")]
-/// Classify one capture and store it.
+/// classify one capture and store it
 struct CaptureCmd {
     #[argh(positional)]
     /// the text, a path to a file, or - for stdin
@@ -70,7 +70,7 @@ struct CaptureCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "meeting")]
-/// Extract decision candidates from a transcript or meeting note.
+/// extract decision candidates from a transcript or meeting note
 struct MeetingCmd {
     #[argh(positional)]
     /// path to the transcript or note
@@ -88,7 +88,7 @@ struct MeetingCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "decisions")]
-/// List the decision ledger as cards.
+/// list the decision ledger as cards
 struct DecisionsCmd {
     #[argh(option)]
     /// filter by status: proposed, accepted, superseded, rejected
@@ -97,34 +97,34 @@ struct DecisionsCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "show")]
-/// Show one decision, with its supersession chain.
+/// show one decision, with its supersession chain
 struct ShowCmd {
     #[argh(positional)]
-    /// DR-NNNN, a ULID, or a title
+    /// decision reference: DR-NNNN, a ULID, or a title
     reference: String,
 }
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "accept")]
-/// Accept a proposed decision.
+/// accept a proposed decision
 struct AcceptCmd {
     #[argh(positional)]
-    /// DR-NNNN
+    /// decision reference, DR-NNNN
     reference: String,
 }
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "reject")]
-/// Reject a proposed decision.
+/// reject a proposed decision
 struct RejectCmd {
     #[argh(positional)]
-    /// DR-NNNN
+    /// decision reference, DR-NNNN
     reference: String,
 }
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "supersede")]
-/// Record a new decision that replaces an older one.
+/// record a new decision that replaces an older one
 struct SupersedeCmd {
     #[argh(positional)]
     /// the decision being replaced, DR-NNNN
@@ -142,7 +142,7 @@ struct SupersedeCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "revert")]
-/// Undo a supersession that should not have happened.
+/// undo a supersession that should not have happened
 struct RevertCmd {
     #[argh(positional)]
     /// the decision that did the superseding, DR-NNNN
@@ -154,7 +154,7 @@ struct RevertCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "search")]
-/// Fuzzy search across titles, bodies, entities and tags.
+/// fuzzy search across titles, bodies, entities and tags
 struct SearchCmd {
     #[argh(positional)]
     /// what to look for
@@ -175,7 +175,7 @@ struct SearchCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "ask")]
-/// Ask about a decision and get the card, not the prose.
+/// ask about a decision and get the card, not the prose
 struct AskCmd {
     #[argh(positional)]
     /// the question
@@ -184,12 +184,12 @@ struct AskCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "stale")]
-/// Show every note that is stale or contradicts the ledger.
+/// show every note that is stale or contradicts the ledger
 struct StaleCmd {}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "verify")]
-/// Re-verify a note: still true, stamp today.
+/// re-verify a note: still true, stamp today
 struct VerifyCmd {
     #[argh(positional)]
     /// vault-relative path of the note
@@ -198,7 +198,7 @@ struct VerifyCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "archive")]
-/// Move a note to _archive/YYYY/.
+/// move a note to _archive/YYYY/
 struct ArchiveCmd {
     #[argh(positional)]
     /// vault-relative path of the note
@@ -207,7 +207,7 @@ struct ArchiveCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "handover")]
-/// Compile a handover packet for a period.
+/// compile a handover packet for a period
 struct HandoverCmd {
     #[argh(option)]
     /// start date, YYYY-MM-DD (default: 14 days ago)
@@ -222,7 +222,7 @@ struct HandoverCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "wrap")]
-/// End-of-day wrap for a date.
+/// end-of-day wrap for a date
 struct WrapCmd {
     #[argh(option)]
     /// date, YYYY-MM-DD (default: today)
@@ -234,7 +234,7 @@ struct WrapCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "digest")]
-/// Weekly digest for the week containing a date.
+/// weekly digest for the week containing a date
 struct DigestCmd {
     #[argh(option)]
     /// date, YYYY-MM-DD (default: today)
@@ -246,24 +246,24 @@ struct DigestCmd {
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "sop")]
-/// Propose SOPs from repeated procedures, or accept one.
+/// propose SOPs from repeated procedures, or accept one
 struct SopCmd {
     #[argh(switch)]
     /// accept a proposal instead of listing
     accept: bool,
     #[argh(option)]
-    /// 1-based proposal number to accept
+    /// proposal number to accept, 1-based
     index: Option<usize>,
 }
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "replay")]
-/// Replay staged writes left behind by a crash.
+/// replay staged writes left behind by a crash
 struct ReplayCmd {}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "status")]
-/// Vault counts and open threads.
+/// vault counts and open threads
 struct StatusCmd {}
 
 fn main() -> ExitCode {

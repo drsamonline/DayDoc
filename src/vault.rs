@@ -645,12 +645,6 @@ pub(crate) mod test_support {
         fs::create_dir_all(&root).expect("create temp vault");
         Vault::with_state(&root, &state).expect("open temp vault")
     }
-
-    pub fn temp_dir() -> PathBuf {
-        let base = std::env::temp_dir().join(format!("daydoc-test-{}", ids::new_ulid()));
-        fs::create_dir_all(&base).expect("create temp dir");
-        base
-    }
 }
 
 #[cfg(test)]
