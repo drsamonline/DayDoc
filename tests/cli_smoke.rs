@@ -378,3 +378,52 @@ fn sync_commits_when_a_repository_exists() {
     let out = sandbox.ok(&["sync"]);
     assert_contains(&out, "nothing to commit");
 }
+
+#[test]
+fn config_can_be_read_and_changed() {
+    let sandbox = Sandbox::new("config");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+
+    let out = sandbox.ok(&["config", "show"]);
+    assert_contains(&out, "llm_mode = \"off\"");
+
+    let out = sandbox.ok(&["config", "set", "stale.sop", "30"]);
+    assert_contains(&out, "stale.sop = 30");
+    let out = sandbox.ok(&["config", "show"]);
+    assert_contains(&out, "sop = 30");
+
+    let output = sandbox.run(&["config", "set", "llm_mode", "cloud"]);
+    assert!(!output.status.success(), "invalid llm_mode accepted");
+
+    let out = sandbox.ok(&["config", "show", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("config json");
+    assert_eq!(parsed["llm_mode"], "off");
+}
+
+#[test]
+fn stats_and_export_produce_output() {
+    let sandbox = Sandbox::new("stats");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+
+    let out = sandbox.ok(&["stats"]);
+    assert_contains(&out, "notes       1");
+
+    let out = sandbox.ok(&["stats", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("stats json");
+    assert_eq!(parsed["decisions"], 1);
+
+    let out = sandbox.ok(&["export"]);
+    assert_contains(&out, ".html");
+    let exports = sandbox.state().join("exports");
+    let written = std::fs::read_dir(&exports).expect("exports dir").count();
+    assert_eq!(written, 1);
+    let file = std::fs::read_dir(&exports)
+        .expect("exports dir")
+        .next()
+        .expect("one file")
+        .expect("entry")
+        .path();
+    let html = std::fs::read_to_string(file).expect("read export");
+    assert!(html.starts_with("<!doctype html>"));
+}

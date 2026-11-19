@@ -19,6 +19,7 @@ pub mod cluster;
 pub mod config;
 pub mod daily;
 pub mod error;
+pub mod export;
 pub mod frontmatter;
 pub mod handover;
 pub mod ids;
@@ -31,6 +32,7 @@ pub mod note;
 pub mod search;
 pub mod sop;
 pub mod stale;
+pub mod stats;
 #[cfg(feature = "git")]
 pub mod sync;
 pub mod summarize;

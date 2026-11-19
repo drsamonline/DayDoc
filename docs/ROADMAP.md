@@ -14,6 +14,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Search: fuzzy, filtered, decision cards, time-anchored `ask`
 - SQLite FTS5 index with self-healing rebuild; search falls back to fuzzy scan
 - Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
+- Stats, config show/set, single-file HTML export
 - Lint: ids, types, citations, links, attachments
 - Backup: dated `.tar.gz` of the vault, 7/4/6 retention, fail-closed on encryption
 - Identity guard: changed `id` is a new note, warned into `_meta/warnings/`

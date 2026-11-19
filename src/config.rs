@@ -168,6 +168,120 @@ impl Config {
         Ok(path)
     }
 
+    /// Keys `daydoc config set` understands.
+    pub const SETTABLE: [&'static str; 17] = [
+        "llm_mode",
+        "llm_provider",
+        "llm_send_content",
+        "min_classification_confidence",
+        "auto_commit",
+        "auto_commit_debounce_secs",
+        "weekly_digest",
+        "trash_retention_days",
+        "backup_enabled",
+        "backup_encrypt",
+        "read_only_vault",
+        "mobile_enabled",
+        "calendar_enabled",
+        "stale.sop",
+        "stale.reference",
+        "stale.project-update",
+        "stale.decision-proposed",
+    ];
+
+    /// Set one key from its textual form. Returns how the value is now stored.
+    pub fn set_key(&mut self, key: &str, raw: &str) -> Result<String> {
+        let value = raw.trim();
+        let boolean = |text: &str| -> Result<bool> {
+            match text.to_ascii_lowercase().as_str() {
+                "true" | "yes" | "1" | "on" => Ok(true),
+                "false" | "no" | "0" | "off" => Ok(false),
+                _ => Err(DayDocError::Config(format!("\"{text}\" is not a boolean"))),
+            }
+        };
+        let integer = |text: &str| -> Result<i64> {
+            text.parse::<i64>()
+                .map_err(|_| DayDocError::Config(format!("\"{text}\" is not a whole number")))
+        };
+
+        match key.trim() {
+            "llm_mode" => {
+                self.llm_mode = value.to_ascii_lowercase();
+                Ok(self.llm_mode.clone())
+            }
+            "llm_provider" => {
+                self.llm_provider = value.to_string();
+                Ok(self.llm_provider.clone())
+            }
+            "llm_send_content" => {
+                self.llm_send_content = boolean(value)?;
+                Ok(self.llm_send_content.to_string())
+            }
+            "min_classification_confidence" => {
+                self.min_classification_confidence = value.parse::<f32>().map_err(|_| {
+                    DayDocError::Config(format!("\"{value}\" is not a confidence between 0 and 1"))
+                })?;
+                Ok(self.min_classification_confidence.to_string())
+            }
+            "auto_commit" => {
+                self.auto_commit = boolean(value)?;
+                Ok(self.auto_commit.to_string())
+            }
+            "auto_commit_debounce_secs" => {
+                self.auto_commit_debounce_secs = integer(value)?.max(0) as u64;
+                Ok(self.auto_commit_debounce_secs.to_string())
+            }
+            "weekly_digest" => {
+                self.weekly_digest = boolean(value)?;
+                Ok(self.weekly_digest.to_string())
+            }
+            "trash_retention_days" => {
+                self.trash_retention_days = integer(value)?.max(0);
+                Ok(self.trash_retention_days.to_string())
+            }
+            "backup_enabled" => {
+                self.backup_enabled = boolean(value)?;
+                Ok(self.backup_enabled.to_string())
+            }
+            "backup_encrypt" => {
+                self.backup_encrypt = boolean(value)?;
+                Ok(self.backup_encrypt.to_string())
+            }
+            "read_only_vault" => {
+                self.read_only_vault = boolean(value)?;
+                Ok(self.read_only_vault.to_string())
+            }
+            "mobile_enabled" => {
+                self.mobile_enabled = boolean(value)?;
+                Ok(self.mobile_enabled.to_string())
+            }
+            "calendar_enabled" => {
+                self.calendar_enabled = boolean(value)?;
+                Ok(self.calendar_enabled.to_string())
+            }
+            "stale.sop" => {
+                self.stale_thresholds.sop = integer(value)?.max(1);
+                Ok(self.stale_thresholds.sop.to_string())
+            }
+            "stale.reference" => {
+                self.stale_thresholds.reference = integer(value)?.max(1);
+                Ok(self.stale_thresholds.reference.to_string())
+            }
+            "stale.project-update" => {
+                self.stale_thresholds.project_update = integer(value)?.max(1);
+                Ok(self.stale_thresholds.project_update.to_string())
+            }
+            "stale.decision-proposed" => {
+                self.stale_thresholds.decision_proposed = integer(value)?.max(1);
+                Ok(self.stale_thresholds.decision_proposed.to_string())
+            }
+            other => Err(DayDocError::Config(format!(
+                "unknown key \"{other}\"; try one of: {}",
+                Config::SETTABLE.join(", ")
+            ))),
+        }
+    }
+
     pub fn llm_enabled(&self) -> bool {
         self.llm_mode != "off"
     }
@@ -204,6 +318,19 @@ mod tests {
         let parsed: Config = toml::from_str(&text).expect("round trip");
         assert_eq!(parsed.stale_thresholds, c.stale_thresholds);
         assert_eq!(parsed.llm_mode, "off");
+    }
+
+    #[test]
+    fn set_key_round_trips_and_rejects_nonsense() {
+        let mut c = Config::default();
+        assert_eq!(c.set_key("stale.sop", "30").expect("set"), "30");
+        assert_eq!(c.stale_thresholds.sop, 30);
+        assert_eq!(c.set_key("llm_mode", "byok").expect("set"), "byok");
+        c.validate().expect("byok validates");
+        assert!(c.set_key("llm_mode", "cloud").is_err());
+        assert!(c.set_key("weekly_digest", "maybe").is_err());
+        assert!(c.set_key("nonsense", "1").is_err());
+        assert!(c.set_key("telemetry", "true").is_err());
     }
 
     #[test]

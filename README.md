@@ -99,6 +99,9 @@ History is never edited.
 - **Git sync, commit only.** Stages and commits the vault; pushing is your own
   credential helper's job, so DayDoc never holds a token. A merge conflict
   becomes a `.conflict.md` sidecar with both sides, never an automatic merge.
+- **Export a period.** One self-contained HTML file — no scripts, no external
+  requests, note bodies escaped and shown as text.
+- **Config without an editor.** `daydoc config set stale.sop 30`.
 - **Lint.** Missing and duplicate ids, unknown types, citations of decisions
   that do not exist, broken `links:`, missing and orphaned attachments.
 
@@ -135,6 +138,9 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+stats       vault counts, entities and dates
+export      write a period as one self-contained html file
+config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 reindex     rebuild the search index from the vault
@@ -172,6 +178,8 @@ and self-update. See `docs/ROADMAP.md`.
 src/
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks
+  stats.rs        vault counts and entities
+  export.rs       one-file HTML export
   migrate.rs      import an existing Markdown folder
   cluster.rs      project auto-clustering (Tier 0)
   attach.rs       content-addressed attachments

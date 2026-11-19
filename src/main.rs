@@ -10,8 +10,8 @@ use daydoc::error::DayDocError;
 use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, daily, handover, index, ledger, lint, meeting, migrate, search,
-    sop, stale, Vault,
+    attach, backup, capture, cluster, daily, export, handover, index, ledger, lint, meeting, migrate,
+    search, sop, stale, stats, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -49,6 +49,9 @@ enum Sub {
     Digest(DigestCmd),
     Sop(SopCmd),
     Backup(BackupCmd),
+    Config(ConfigCmd),
+    Stats(StatsCmd),
+    Export(ExportCmd),
     Check(CheckCmd),
     Import(ImportCmd),
     Lint(LintCmd),
@@ -296,6 +299,66 @@ struct SyncCmd {
     #[argh(switch)]
     /// show what would be committed, write nothing
     dry_run: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "config")]
+/// show or change daydoc.toml
+struct ConfigCmd {
+    #[argh(subcommand)]
+    action: ConfigAction,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand)]
+enum ConfigAction {
+    Show(ConfigShow),
+    Set(ConfigSet),
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "show")]
+/// print the effective configuration
+struct ConfigShow {
+    #[argh(switch)]
+    /// print json instead of toml
+    json: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "set")]
+/// change one setting and write daydoc.toml
+struct ConfigSet {
+    #[argh(positional)]
+    /// the key, for example stale.sop
+    key: String,
+    #[argh(positional)]
+    /// the new value
+    value: String,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "stats")]
+/// vault counts, entities and dates
+struct StatsCmd {
+    #[argh(switch)]
+    /// print json instead of a summary
+    json: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "export")]
+/// write a period as one self-contained html file
+struct ExportCmd {
+    #[argh(option)]
+    /// start date, YYYY-MM-DD (default: 30 days ago)
+    from: Option<String>,
+    #[argh(option)]
+    /// end date, YYYY-MM-DD (default: today)
+    to: Option<String>,
+    #[argh(option)]
+    /// where to write the file (default: the state directory)
+    out: Option<String>,
 }
 
 #[derive(FromArgs, Debug)]
@@ -824,6 +887,60 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             }
             let note = sop::accept(&vault, &proposals[index - 1])?;
             println!("wrote {}", note.rel_path);
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Config(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            match cmd.action {
+                ConfigAction::Show(show) => {
+                    if show.json {
+                        print_json(vault.config());
+                    } else {
+                        print!("{}", vault.config().to_toml());
+                    }
+                    Ok(ExitCode::SUCCESS)
+                }
+                ConfigAction::Set(set) => {
+                    if vault.is_read_only() {
+                        return Err(DayDocError::ReadOnly("config".to_string()));
+                    }
+                    let mut config = vault.config().clone();
+                    let stored = config.set_key(&set.key, &set.value)?;
+                    config.validate()?;
+                    config.write_to(vault.root())?;
+                    println!("{} = {stored}", set.key);
+                    Ok(ExitCode::SUCCESS)
+                }
+            }
+        }
+
+        Sub::Stats(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let summary = stats::compute(&vault)?;
+            if cmd.json {
+                print_json(&summary);
+            } else {
+                print!("{}", summary.render());
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Export(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let to = today_or(cmd.to);
+            let from = cmd.from.unwrap_or_else(|| {
+                let date = chrono::Local::now().date_naive() - chrono::Duration::days(30);
+                date.format("%Y-%m-%d").to_string()
+            });
+            let out = cmd.out.map(PathBuf::from).unwrap_or_else(|| {
+                vault
+                    .state_dir()
+                    .join("exports")
+                    .join(format!("daydoc-{from}-to-{to}.html"))
+            });
+            let report = export::run(&vault, &from, &to, &out)?;
+            print!("{}", report.render());
             Ok(ExitCode::SUCCESS)
         }
 
