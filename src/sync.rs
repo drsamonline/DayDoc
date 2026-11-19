@@ -122,7 +122,8 @@ pub fn commit(vault: &Vault, message: Option<&str>) -> Result<SyncReport> {
         )
         .map_err(git_err)?;
 
-    vault.audit("git-commit", &oid.to_string(), &message)?;
+    // No audit line here on purpose: writing one after the commit would dirty
+    // the tree again, and the git history is already the audit trail.
     Ok(SyncReport {
         changed,
         committed: true,
