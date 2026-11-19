@@ -1,5 +1,8 @@
 //! The handover packet: what I did, what is open, what is decided, who to ask,
-//! and a link to the source for each. Markdown only at v1.
+//! and a link to the source for each. Markdown only at v1, plus the same facts
+//! as structured data for a script.
+
+use serde::Serialize;
 
 use crate::error::Result;
 use crate::ledger;
@@ -7,6 +10,82 @@ use crate::note::Note;
 use crate::stale;
 use crate::types::{DecisionStatus, NoteType};
 use crate::vault::{now_iso, today, Vault};
+
+/// Everything a handover says, before it is rendered.
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoverData {
+    pub from: String,
+    pub to: String,
+    /// "YYYY-MM-DD — title (type)"
+    pub did: Vec<String>,
+    /// Open task lines.
+    pub open: Vec<String>,
+    /// "DR-NNNN — title"
+    pub decided: Vec<String>,
+    /// (who, why) for every open thread.
+    pub who: Vec<(String, String)>,
+    /// "title (path)" for every stale document.
+    pub stale: Vec<String>,
+}
+
+impl HandoverData {
+    pub fn render(&self) -> String {
+        let mut md = String::new();
+        md.push_str(&format!("# Handover {} to {}\n\n", self.from, self.to));
+        md.push_str(&format!("_Generated {}. Markdown only._\n\n", now_iso()));
+
+        md.push_str("## What I did\n\n");
+        if self.did.is_empty() {
+            md.push_str("_No notes touched in this period._\n\n");
+        } else {
+            for line in &self.did {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## What is open\n\n");
+        if self.open.is_empty() {
+            md.push_str("_No open tasks._\n\n");
+        } else {
+            for line in &self.open {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## What is decided\n\n");
+        if self.decided.is_empty() {
+            md.push_str("_No decisions recorded in this period._\n\n");
+        } else {
+            for line in &self.decided {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## Who to ask\n\n");
+        if self.who.is_empty() {
+            md.push_str("_Nobody has an open thread._\n\n");
+        } else {
+            for (who, why) in &self.who {
+                md.push_str(&format!("- {who} — {why}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## Stale documents\n\n");
+        if self.stale.is_empty() {
+            md.push_str("_Nothing flagged._\n\n");
+        } else {
+            for line in &self.stale {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+        md
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Handover {
@@ -61,7 +140,8 @@ fn open_tasks(note: &Note) -> Vec<String> {
 fn person_in(task: &str) -> Option<String> {
     for token in task.split_whitespace() {
         if let Some(handle) = token.strip_prefix('@') {
-            let cleaned = handle.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '-');
+            let cleaned =
+                handle.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '-');
             if !cleaned.is_empty() {
                 return Some(cleaned.to_string());
             }
@@ -70,12 +150,12 @@ fn person_in(task: &str) -> Option<String> {
     None
 }
 
-/// Compile a handover packet for a period, inclusive.
-pub fn build(vault: &Vault, from: &str, to: &str) -> Result<Handover> {
+/// Compile the packet's facts for a period, inclusive.
+pub fn build_data(vault: &Vault, from: &str, to: &str) -> Result<HandoverData> {
     let notes = vault.scan()?.notes;
-    let mut touched: Vec<(String, String, NoteType)> = Vec::new();
-    let mut tasks: Vec<(String, String, Option<String>)> = Vec::new();
-    let mut people: Vec<(String, String)> = Vec::new();
+    let mut did: Vec<String> = Vec::new();
+    let mut open: Vec<String> = Vec::new();
+    let mut who: Vec<(String, String)> = Vec::new();
 
     for note in &notes {
         if note.note_type() == NoteType::Decision {
@@ -83,14 +163,17 @@ pub fn build(vault: &Vault, from: &str, to: &str) -> Result<Handover> {
         }
         let date = note_date(vault, note).unwrap_or_default();
         if in_range(&date, from, to) {
-            touched.push((date.clone(), note.title(), note.note_type()));
+            did.push(format!("{date} — {} _({})_", note.title(), note.note_type()));
         }
         for task in open_tasks(note) {
             let owner = person_in(&task);
-            if let Some(who) = &owner {
-                people.push((who.clone(), format!("open task in {}", note.rel_path)));
+            if let Some(person) = &owner {
+                who.push((person.clone(), format!("open task in {}", note.rel_path)));
             }
-            tasks.push((note.title(), task, owner));
+            match owner {
+                Some(owner) => open.push(format!("{task} — {owner} _({})_", note.rel_path)),
+                None => open.push(format!("{task} _({})_", note.rel_path)),
+            }
         }
     }
 
@@ -102,7 +185,7 @@ pub fn build(vault: &Vault, from: &str, to: &str) -> Result<Handover> {
         }
         if card.status == DecisionStatus::Proposed {
             if let Some(owner) = &card.owner {
-                people.push((
+                who.push((
                     owner.clone(),
                     format!("owns proposed {}", card.decision_id),
                 ));
@@ -110,83 +193,40 @@ pub fn build(vault: &Vault, from: &str, to: &str) -> Result<Handover> {
         }
     }
 
-    let stale_flags = stale::scan(vault)?;
-    for flag in &stale_flags {
-        people.push((
+    let mut stale_docs: Vec<String> = Vec::new();
+    for flag in stale::scan(vault)? {
+        who.push((
             "documentation owner".to_string(),
             format!("{} is stale", flag.rel_path),
         ));
+        stale_docs.push(format!("{} ({})", flag.title, flag.rel_path));
     }
 
-    touched.sort();
-    touched.dedup_by(|a, b| a.1 == b.1);
+    did.sort();
+    did.dedup();
+    decided.sort();
+    who.sort();
+    who.dedup();
+    stale_docs.sort();
 
-    let mut md = String::new();
-    md.push_str(&format!("# Handover {from} to {to}\n\n"));
-    md.push_str(&format!("_Generated {}. Markdown only._\n\n", now_iso()));
-
-    md.push_str("## What I did\n\n");
-    if touched.is_empty() {
-        md.push_str("_No notes touched in this period._\n\n");
-    } else {
-        for (date, title, note_type) in &touched {
-            md.push_str(&format!("- {date} — {title} _({note_type})_\n"));
-        }
-        md.push('\n');
-    }
-
-    md.push_str("## What is open\n\n");
-    if tasks.is_empty() {
-        md.push_str("_No open tasks._\n\n");
-    } else {
-        for (source, task, owner) in &tasks {
-            match owner {
-                Some(owner) => md.push_str(&format!("- {task} — {owner} _({source})_\n")),
-                None => md.push_str(&format!("- {task} _({source})_\n")),
-            }
-        }
-        md.push('\n');
-    }
-
-    md.push_str("## What is decided\n\n");
-    if decided.is_empty() {
-        md.push_str("_No decisions recorded in this period._\n\n");
-    } else {
-        for line in &decided {
-            md.push_str(&format!("- {line}\n"));
-        }
-        md.push('\n');
-    }
-
-    md.push_str("## Who to ask\n\n");
-    people.sort();
-    people.dedup();
-    if people.is_empty() {
-        md.push_str("_Nobody has an open thread._\n\n");
-    } else {
-        for (who, why) in &people {
-            md.push_str(&format!("- {who} — {why}\n"));
-        }
-        md.push('\n');
-    }
-
-    md.push_str("## Stale documents\n\n");
-    if stale_flags.is_empty() {
-        md.push_str("_Nothing flagged._\n\n");
-    } else {
-        for flag in &stale_flags {
-            md.push_str(&format!("- {} ({})\n", flag.title, flag.rel_path));
-            for reason in &flag.reasons {
-                md.push_str(&format!("  - {}\n", reason.describe()));
-            }
-        }
-        md.push('\n');
-    }
-
-    Ok(Handover {
+    Ok(HandoverData {
         from: from.to_string(),
         to: to.to_string(),
-        markdown: md,
+        did,
+        open,
+        decided,
+        who,
+        stale: stale_docs,
+    })
+}
+
+/// Compile a handover packet for a period, inclusive.
+pub fn build(vault: &Vault, from: &str, to: &str) -> Result<Handover> {
+    let data = build_data(vault, from, to)?;
+    Ok(Handover {
+        from: data.from.clone(),
+        to: data.to.clone(),
+        markdown: data.render(),
     })
 }
 
@@ -214,7 +254,9 @@ mod tests {
         let date = today();
         ledger::create(
             &vault,
-            &NewDecision::new("Use Okta for SSO").accepted().with_owner("alice"),
+            &NewDecision::new("Use Okta for SSO")
+                .accepted()
+                .with_owner("alice"),
         )
         .expect("decision");
         vault
@@ -239,6 +281,37 @@ mod tests {
         assert!(packet.markdown.contains("Use Okta for SSO"));
         assert!(packet.markdown.contains("ship the migration"));
         assert!(packet.markdown.contains("priya"));
+    }
+
+    #[test]
+    fn data_carries_the_same_facts_as_the_markdown() {
+        let vault = temp_vault();
+        let date = today();
+        ledger::create(
+            &vault,
+            &NewDecision::new("Use Okta for SSO")
+                .accepted()
+                .with_owner("alice"),
+        )
+        .expect("decision");
+        vault
+            .write(
+                "projects/atlas.md",
+                &format!(
+                    "---\ntype: project-update\ntitle: Atlas status\nupdated: {date}\n---\n- [ ] ship the migration @priya\n"
+                ),
+            )
+            .expect("note");
+
+        let data = build_data(&vault, &date, &date).expect("data");
+        assert_eq!(data.from, date);
+        assert!(data.did.iter().any(|line| line.contains("Atlas status")));
+        assert!(data.open.iter().any(|line| line.contains("ship the migration")));
+        assert!(data.decided.iter().any(|line| line.contains("DR-0001")));
+        assert!(data.who.iter().any(|(who, _)| who == "priya"));
+        // The rendered packet is exactly what the data says.
+        let packet = build(&vault, &date, &date).expect("build");
+        assert_eq!(packet.markdown, data.render());
     }
 
     #[test]

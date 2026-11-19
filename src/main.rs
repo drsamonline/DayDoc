@@ -251,6 +251,9 @@ struct HandoverCmd {
     #[argh(switch)]
     /// print only, write nothing
     dry_run: bool,
+    #[argh(switch)]
+    /// print the packet as json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -263,6 +266,9 @@ struct WrapCmd {
     #[argh(switch)]
     /// print only, write nothing
     dry_run: bool,
+    #[argh(switch)]
+    /// print the wrap as json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -275,6 +281,9 @@ struct DigestCmd {
     #[argh(switch)]
     /// print only, write nothing
     dry_run: bool,
+    #[argh(switch)]
+    /// print the digest as json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -829,6 +838,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 let date = chrono::Local::now().date_naive() - chrono::Duration::days(14);
                 date.format("%Y-%m-%d").to_string()
             });
+            if cmd.json {
+                print_json(&handover::build_data(&vault, &from, &to)?);
+                return Ok(ExitCode::SUCCESS);
+            }
             let packet = handover::build(&vault, &from, &to)?;
             if cmd.dry_run {
                 print!("{}", packet.markdown);
@@ -842,6 +855,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Wrap(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let date = today_or(cmd.date);
+            if cmd.json {
+                print_json(&daily::wrap_data(&vault, &date)?);
+                return Ok(ExitCode::SUCCESS);
+            }
             if cmd.dry_run {
                 print!("{}", daily::eod_wrap(&vault, &date)?);
             } else {
@@ -854,6 +871,11 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Digest(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let date = today_or(cmd.date);
+            if cmd.json {
+                let (rel, data) = daily::digest_data(&vault, &date)?;
+                print_json(&serde_json::json!({ "path": rel, "digest": data }));
+                return Ok(ExitCode::SUCCESS);
+            }
             if cmd.dry_run {
                 let (_, md) = daily::weekly_digest(&vault, &date)?;
                 print!("{md}");

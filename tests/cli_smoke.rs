@@ -427,3 +427,26 @@ fn stats_and_export_produce_output() {
     let html = std::fs::read_to_string(file).expect("read export");
     assert!(html.starts_with("<!doctype html>"));
 }
+
+#[test]
+fn loop_commands_emit_structured_json() {
+    let sandbox = Sandbox::new("loop-json");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    sandbox.ok(&["accept", "DR-0001"]);
+
+    let out = sandbox.ok(&["handover", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("handover json");
+    assert!(parsed["decided"]
+        .as_array()
+        .map(|a| a.iter().any(|v| v.as_str().unwrap_or("").contains("DR-0001")))
+        .unwrap_or(false));
+
+    let out = sandbox.ok(&["wrap", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("wrap json");
+    assert!(parsed["date"].as_str().is_some());
+
+    let out = sandbox.ok(&["digest", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("digest json");
+    assert!(parsed["path"].as_str().unwrap_or("").starts_with("daily/digests/"));
+}

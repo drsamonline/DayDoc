@@ -1,0 +1,55 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  binaries:
+    name: binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: test before packaging
+        run: cargo test --all-targets
+      - name: package and upload
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: daydoc
+          target: ${{ matrix.target }}
+          archive: daydoc-$tag-$target
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deb:
+    name: debian package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-deb
+        run: cargo install cargo-deb --locked
+      - name: build .deb
+        run: cargo deb
+      - name: upload .deb
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/debian/*.deb

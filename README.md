@@ -150,7 +150,7 @@ import      import an existing Markdown folder (dry-run preview)
 cluster     propose project folders from notes that cluster
 attach      store a file content-addressed under assets/
 purge       delete trash past the retention window
-handover    compile a handover packet
+handover    compile a handover packet (--json for the facts)
 wrap        end-of-day wrap
 digest      weekly digest
 sop         propose or accept an SOP
@@ -162,6 +162,11 @@ status      vault counts and open threads
 
 Not chosen yet. Add a `LICENSE` file and the matching `license` field in
 `Cargo.toml` before publishing binaries.
+
+## Packaging
+
+`v*` tags build Linux and Windows archives plus a `.deb`. See
+`docs/PACKAGING.md` for what ships and what does not yet.
 
 ## Status
 

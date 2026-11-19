@@ -1,6 +1,7 @@
 //! The daily loop: morning plan, end-of-day wrap, Monday digest.
 
 use chrono::Datelike;
+use serde::Serialize;
 
 use crate::error::Result;
 use crate::ids;
@@ -68,9 +69,66 @@ fn open_task_lines(note: &Note) -> Vec<String> {
         .collect()
 }
 
-/// End-of-day wrap: structured counts plus an extractive summary of the prose
-/// captures, in a form the user can edit in thirty seconds.
-pub fn eod_wrap(vault: &Vault, date: &str) -> Result<String> {
+/// Structured end-of-day data. The markdown is a rendering of this, so a
+/// script and a human see the same facts.
+#[derive(Debug, Clone, Serialize)]
+pub struct WrapData {
+    pub date: String,
+    pub decisions: Vec<String>,
+    pub tasks: Vec<String>,
+    pub touched: Vec<String>,
+    pub summary: String,
+}
+
+impl WrapData {
+    pub fn render(&self) -> String {
+        let mut out = String::new();
+        out.push_str(&format!("# End of day — {}\n\n", self.date));
+
+        out.push_str("## Decisions\n\n");
+        if self.decisions.is_empty() {
+            out.push_str("_None recorded today._\n\n");
+        } else {
+            for line in &self.decisions {
+                out.push_str(&format!("- {line}\n"));
+            }
+            out.push('\n');
+        }
+
+        out.push_str("## Tasks opened\n\n");
+        if self.tasks.is_empty() {
+            out.push_str("_None._\n\n");
+        } else {
+            for task in &self.tasks {
+                out.push_str(&format!("- [ ] {task}\n"));
+            }
+            out.push('\n');
+        }
+
+        out.push_str("## Notes touched\n\n");
+        if self.touched.is_empty() {
+            out.push_str("_None._\n\n");
+        } else {
+            for line in &self.touched {
+                out.push_str(&format!("- {line}\n"));
+            }
+            out.push('\n');
+        }
+
+        out.push_str("## In your words\n\n");
+        if self.summary.trim().is_empty() {
+            out.push_str("_No prose captures today._\n\n");
+        } else {
+            out.push_str(&self.summary);
+            out.push_str("\n\n");
+        }
+        out
+    }
+}
+
+/// End-of-day wrap as data: structured counts plus an extractive summary of the
+/// prose captures.
+pub fn wrap_data(vault: &Vault, date: &str) -> Result<WrapData> {
     let notes = vault.scan()?.notes;
     let cards = ledger::cards(vault)?;
 
@@ -105,53 +163,30 @@ pub fn eod_wrap(vault: &Vault, date: &str) -> Result<String> {
     touched.sort();
     touched.dedup();
 
-    let mut out = String::new();
-    out.push_str(&format!("# End of day — {date}\n\n"));
-
-    out.push_str("## Decisions\n\n");
-    if decisions.is_empty() {
-        out.push_str("_None recorded today._\n\n");
-    } else {
-        for line in &decisions {
-            out.push_str(&format!("- {line}\n"));
-        }
-        out.push('\n');
-    }
-
-    out.push_str("## Tasks opened\n\n");
-    if tasks.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for task in &tasks {
-            out.push_str(&format!("- [ ] {task}\n"));
-        }
-        out.push('\n');
-    }
-
-    out.push_str("## Notes touched\n\n");
-    if touched.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for line in &touched {
-            out.push_str(&format!("- {line}\n"));
-        }
-        out.push('\n');
-    }
-
-    out.push_str("## In your words\n\n");
     let joined = prose.join("\n");
-    if joined.trim().is_empty() {
-        out.push_str("_No prose captures today._\n\n");
+    let summary = if joined.trim().is_empty() {
+        String::new()
     } else {
-        out.push_str(&extractive_summary(&joined, 4));
-        out.push_str("\n\n");
-    }
-    Ok(out)
+        extractive_summary(&joined, 4)
+    };
+
+    Ok(WrapData {
+        date: date.to_string(),
+        decisions,
+        tasks,
+        touched,
+        summary,
+    })
+}
+
+/// End-of-day wrap as markdown.
+pub fn eod_wrap(vault: &Vault, date: &str) -> Result<String> {
+    Ok(wrap_data(vault, date)?.render())
 }
 
 /// Append the wrap into the daily note's `## End of day` section.
 pub fn write_wrap(vault: &Vault, date: &str) -> Result<String> {
-    let wrap = eod_wrap(vault, date)?;
+    let wrap = wrap_data(vault, date)?.render();
     let mut note = ensure_daily(vault, date)?;
     let header = format!("# End of day — {date}");
     let section = wrap.replacen(&header, "", 1).trim().to_string();
@@ -188,17 +223,87 @@ pub fn iso_week(date: &str) -> String {
     }
 }
 
-/// Monday digest: decisions, stale docs, SOP proposals, open action items and
-/// old inbox items.
-pub fn weekly_digest(vault: &Vault, date: &str) -> Result<(String, String)> {
+/// Structured weekly digest.
+#[derive(Debug, Clone, Serialize)]
+pub struct DigestData {
+    pub week: String,
+    pub from: String,
+    pub to: String,
+    pub decisions: Vec<String>,
+    pub stale: Vec<String>,
+    pub sop: Vec<String>,
+    pub open_tasks: Vec<String>,
+    pub old_inbox: Vec<String>,
+}
+
+impl DigestData {
+    pub fn render(&self) -> String {
+        let mut md = String::new();
+        md.push_str(&format!(
+            "# Week {}\n\n_{} to {}_\n\n",
+            self.week, self.from, self.to
+        ));
+
+        md.push_str("## Decisions made\n\n");
+        if self.decisions.is_empty() {
+            md.push_str("_None._\n\n");
+        } else {
+            for line in &self.decisions {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## Docs gone stale\n\n");
+        if self.stale.is_empty() {
+            md.push_str("_Nothing flagged._\n\n");
+        } else {
+            for line in &self.stale {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## SOP proposals\n\n");
+        if self.sop.is_empty() {
+            md.push_str("_None this week._\n\n");
+        } else {
+            for line in &self.sop {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## Open action items\n\n");
+        if self.open_tasks.is_empty() {
+            md.push_str("_None._\n\n");
+        } else {
+            for line in &self.open_tasks {
+                md.push_str(&format!("- [ ] {line}\n"));
+            }
+            md.push('\n');
+        }
+
+        md.push_str("## Inbox older than 14 days\n\n");
+        if self.old_inbox.is_empty() {
+            md.push_str("_Nothing rotting._\n\n");
+        } else {
+            for line in &self.old_inbox {
+                md.push_str(&format!("- {line}\n"));
+            }
+            md.push('\n');
+        }
+        md
+    }
+}
+
+/// Monday digest as data: decisions, stale docs, SOP proposals, open action
+/// items and old inbox items.
+pub fn digest_data(vault: &Vault, date: &str) -> Result<(String, DigestData)> {
     let (from, to) = week_bounds(date).unwrap_or_else(|| (date.to_string(), date.to_string()));
     let label = iso_week(date);
     let notes = vault.scan()?.notes;
 
-    let mut md = String::new();
-    md.push_str(&format!("# Week {label}\n\n_{from} to {to}_\n\n"));
-
-    md.push_str("## Decisions made\n\n");
     let mut decisions: Vec<String> = ledger::cards(vault)?
         .iter()
         .filter(|c| {
@@ -211,57 +316,32 @@ pub fn weekly_digest(vault: &Vault, date: &str) -> Result<(String, String)> {
         .map(|c| format!("{} — {}", c.decision_id, c.title))
         .collect();
     decisions.sort();
-    if decisions.is_empty() {
-        md.push_str("_None._\n\n");
-    } else {
-        for line in &decisions {
-            md.push_str(&format!("- {line}\n"));
-        }
-        md.push('\n');
-    }
 
-    md.push_str("## Docs gone stale\n\n");
-    let flags = stale::scan(vault)?;
-    if flags.is_empty() {
-        md.push_str("_Nothing flagged._\n\n");
-    } else {
-        for flag in &flags {
-            md.push_str(&format!("- {} ({})\n", flag.title, flag.rel_path));
-        }
-        md.push('\n');
-    }
+    let mut stale_docs: Vec<String> = stale::scan(vault)?
+        .iter()
+        .map(|flag| format!("{} ({})", flag.title, flag.rel_path))
+        .collect();
+    stale_docs.sort();
 
-    md.push_str("## SOP proposals\n\n");
-    let proposals = sop::propose(vault)?;
-    if proposals.is_empty() {
-        md.push_str("_None this week._\n\n");
-    } else {
-        for proposal in &proposals {
-            md.push_str(&format!(
-                "- {} — {} notes describe the same sequence\n",
+    let mut proposals: Vec<String> = sop::propose(vault)?
+        .iter()
+        .map(|proposal| {
+            format!(
+                "{} — {} notes describe the same sequence",
                 proposal.title, proposal.support
-            ));
-        }
-        md.push('\n');
-    }
+            )
+        })
+        .collect();
+    proposals.sort();
 
-    md.push_str("## Open action items\n\n");
     let mut open: Vec<String> = Vec::new();
     for note in &notes {
         for task in open_task_lines(note) {
             open.push(format!("{task} _({})_", note.rel_path));
         }
     }
-    if open.is_empty() {
-        md.push_str("_None._\n\n");
-    } else {
-        for line in open.iter().take(40) {
-            md.push_str(&format!("- [ ] {line}\n"));
-        }
-        md.push('\n');
-    }
+    open.truncate(40);
 
-    md.push_str("## Inbox older than 14 days\n\n");
     let cutoff = (chrono::Local::now().date_naive() - chrono::Duration::days(14))
         .format("%Y-%m-%d")
         .to_string();
@@ -275,17 +355,27 @@ pub fn weekly_digest(vault: &Vault, date: &str) -> Result<(String, String)> {
         .map(|n| format!("{} ({})", n.title(), n.rel_path))
         .collect();
     old_inbox.sort();
-    if old_inbox.is_empty() {
-        md.push_str("_Nothing rotting._\n\n");
-    } else {
-        for line in &old_inbox {
-            md.push_str(&format!("- {line}\n"));
-        }
-        md.push('\n');
-    }
 
     let rel = format!("daily/digests/{label}.md");
-    Ok((rel, md))
+    Ok((
+        rel,
+        DigestData {
+            week: label,
+            from,
+            to,
+            decisions,
+            stale: stale_docs,
+            sop: proposals,
+            open_tasks: open,
+            old_inbox,
+        },
+    ))
+}
+
+/// Weekly digest as markdown, plus the path it belongs at.
+pub fn weekly_digest(vault: &Vault, date: &str) -> Result<(String, String)> {
+    let (rel, data) = digest_data(vault, date)?;
+    Ok((rel, data.render()))
 }
 
 /// Write the digest to `daily/digests/`.
