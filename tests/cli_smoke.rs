@@ -350,3 +350,31 @@ fn lint_reports_a_missing_id_and_reindex_rebuilds() {
     let out = sandbox.ok(&["search", "okta"]);
     assert_contains(&out, "DR-0001");
 }
+
+#[test]
+fn sync_without_a_repository_says_so() {
+    let sandbox = Sandbox::new("sync");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let output = sandbox.run(&["sync"]);
+    assert!(!output.status.success(), "sync should refuse without a repo");
+    let err = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(err.contains("git init"), "unhelpful error: {err}");
+}
+
+#[test]
+fn sync_commits_when_a_repository_exists() {
+    let sandbox = Sandbox::new("sync-ok");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    let init = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(sandbox.vault())
+        .status();
+    if init.map(|s| !s.success()).unwrap_or(true) {
+        return; // no git on this runner; the unit tests cover the commit path
+    }
+    let out = sandbox.ok(&["sync"]);
+    assert_contains(&out, "committed");
+    let out = sandbox.ok(&["sync"]);
+    assert_contains(&out, "nothing to commit");
+}

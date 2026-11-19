@@ -40,6 +40,9 @@ pub enum DayDocError {
 
     #[error("yaml error: {0}")]
     Yaml(String),
+
+    #[error("git error: {0}")]
+    Git(String),
 }
 
 impl DayDocError {

@@ -6,6 +6,8 @@ use std::process::ExitCode;
 use argh::FromArgs;
 
 use daydoc::error::DayDocError;
+#[cfg(feature = "git")]
+use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
     attach, backup, capture, cluster, daily, handover, index, ledger, lint, meeting, migrate, search,
@@ -50,6 +52,7 @@ enum Sub {
     Check(CheckCmd),
     Import(ImportCmd),
     Lint(LintCmd),
+    Sync(SyncCmd),
     Reindex(ReindexCmd),
     Cluster(ClusterCmd),
     Attach(AttachCmd),
@@ -284,6 +287,18 @@ struct SopCmd {
 }
 
 #[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "sync")]
+/// commit the vault to git (never pushes)
+struct SyncCmd {
+    #[argh(option)]
+    /// commit message
+    message: Option<String>,
+    #[argh(switch)]
+    /// show what would be committed, write nothing
+    dry_run: bool,
+}
+
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "lint")]
 /// report vault problems: ids, links, citations, assets
 struct LintCmd {
@@ -426,6 +441,42 @@ fn parse_kind(raw: &str) -> daydoc::Result<NoteType> {
             "unknown note type \"{raw}\"; try daily, meeting, decision, task, idea, sop, project-update, reference"
         ))
     })
+}
+
+fn run_sync(
+    vault: &Vault,
+    message: Option<String>,
+    dry_run: bool,
+) -> daydoc::Result<ExitCode> {
+    #[cfg(feature = "git")]
+    {
+        if dry_run {
+            let changed = sync::status(vault)?;
+            if changed.is_empty() {
+                println!("nothing to commit");
+            } else {
+                println!("{} file(s) would be committed:", changed.len());
+                for path in changed.iter().take(40) {
+                    println!("  {path}");
+                }
+            }
+            return Ok(ExitCode::SUCCESS);
+        }
+        let conflicts = sync::quarantine_conflicts(vault)?;
+        for sidecar in &conflicts {
+            println!("conflict copy written to {sidecar}");
+        }
+        let report = sync::commit(vault, message.as_deref())?;
+        print!("{}", report.render());
+        Ok(ExitCode::SUCCESS)
+    }
+    #[cfg(not(feature = "git"))]
+    {
+        let _ = (vault, message, dry_run);
+        Err(DayDocError::Config(
+            "this build has no git support (feature \"git\" is off)".to_string(),
+        ))
+    }
 }
 
 fn print_json<T: serde::Serialize>(value: &T) {
@@ -774,6 +825,11 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             let note = sop::accept(&vault, &proposals[index - 1])?;
             println!("wrote {}", note.rel_path);
             Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Sync(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            run_sync(&vault, cmd.message, cmd.dry_run)
         }
 
         Sub::Lint(cmd) => {

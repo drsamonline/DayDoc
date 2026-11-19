@@ -31,6 +31,8 @@ pub mod note;
 pub mod search;
 pub mod sop;
 pub mod stale;
+#[cfg(feature = "git")]
+pub mod sync;
 pub mod summarize;
 pub mod types;
 pub mod vault;

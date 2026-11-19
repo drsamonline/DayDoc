@@ -96,6 +96,9 @@ History is never edited.
 - **An index that heals itself.** Metadata and a SQLite FTS5 table live outside
   the vault; on open, a disagreeing index is rebuilt. Search uses it when it can
   match and falls back to a fuzzy scan when a query is a typo.
+- **Git sync, commit only.** Stages and commits the vault; pushing is your own
+  credential helper's job, so DayDoc never holds a token. A merge conflict
+  becomes a `.conflict.md` sidecar with both sides, never an automatic merge.
 - **Lint.** Missing and duplicate ids, unknown types, citations of decisions
   that do not exist, broken `links:`, missing and orphaned attachments.
 
@@ -132,6 +135,7 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 reindex     rebuild the search index from the vault
 backup      write a dated .tar.gz and apply 7/4/6 retention

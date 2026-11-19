@@ -15,12 +15,17 @@ path = "src/lib.rs"
 name = "daydoc"
 path = "src/main.rs"
 
+[features]
+default = ["git"]
+git = ["dep:git2"]
+
 [dependencies]
 anyhow = "1"
 argh = "0.1"
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+git2 = { version = "0.20", default-features = false, optional = true }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

@@ -13,6 +13,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Staleness: age by type + contradiction, three resolutions
 - Search: fuzzy, filtered, decision cards, time-anchored `ask`
 - SQLite FTS5 index with self-healing rebuild; search falls back to fuzzy scan
+- Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
 - Lint: ids, types, citations, links, attachments
 - Backup: dated `.tar.gz` of the vault, 7/4/6 retention, fail-closed on encryption
 - Identity guard: changed `id` is a new note, warned into `_meta/warnings/`
@@ -34,9 +35,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    and the re-verify entry point.
 3. **Watcher.** `notify-debouncer-full` re-index on external edits (VS Code,
    Obsidian), with the Windows lock retry already in `vault`.
-4. **Git sync.** `git2`, batched auto-commit every 300 s, commit only, push
-   through the user's own credential helper, `.conflict.md` sidecars, never
-   auto-merged.
+4. **Sync on a timer.** The commit path exists; the 300 s debounce belongs to
+   the watcher, which needs the desktop shell.
 5. **Backup encryption.** AES-256-GCM with the key in the OS keychain;
    `backup_encrypt = true` refuses to run until this lands.
 6. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
