@@ -38,6 +38,8 @@ cargo test
 ```bash
 daydoc init ~/vault                 # three clicks, no wizard
 daydoc capture "we decided to adopt Okta for SSO"   # -> decisions/DR-0001.md
+daydoc capture --text "- [ ] send the invoice"      # text starting with a dash
+cat note.md | daydoc capture -                       # or from stdin
 daydoc decisions                    # the ledger, as cards
 daydoc ask "what did we decide about okta"
 ```

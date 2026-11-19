@@ -170,6 +170,13 @@ fn title_from(sentence: &str) -> String {
     }
 }
 
+/// Title for a decision: the cue phrase stripped, the object kept.
+///
+/// `we decided to adopt Okta for SSO` becomes `Adopt Okta for SSO`.
+pub fn decision_title(sentence: &str) -> String {
+    title_from(sentence)
+}
+
 /// Best owner guess from the sentence, then from the surrounding text.
 fn owner_from(sentence: &str) -> Option<String> {
     for re in [owner_re(), will_own_re()] {

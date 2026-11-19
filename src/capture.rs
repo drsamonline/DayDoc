@@ -91,7 +91,15 @@ fn store(
     let slug = ids::slug(&title, 50);
 
     if note_type == NoteType::Decision {
-        let mut request = NewDecision::new(title.clone()).with_decision(text.trim().to_string());
+        // A decision is titled by what was decided, not by the announcement.
+        let first_line = text
+            .lines()
+            .map(|line| line.trim().trim_start_matches('#').trim())
+            .find(|line| !line.is_empty())
+            .unwrap_or("");
+        let decision_title = crate::meeting::decision_title(first_line);
+        let mut request =
+            NewDecision::new(decision_title).with_decision(text.trim().to_string());
         request.status = DecisionStatus::Proposed;
         let note = ledger::create(vault, &request)?;
         return Ok(CaptureOutcome {

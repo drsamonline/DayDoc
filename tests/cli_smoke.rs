@@ -162,7 +162,11 @@ fn handover_and_digest_render() {
     let sandbox = Sandbox::new("handover");
     sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
     sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
-    sandbox.ok(&["capture", "- [ ] send the invoice\n- [ ] book the room\n"]);
+    sandbox.ok(&[
+        "capture",
+        "--text",
+        "- [ ] send the invoice\n- [ ] book the room\n",
+    ]);
 
     let out = sandbox.ok(&["handover", "--dry-run"]);
     assert_contains(&out, "## What I did");

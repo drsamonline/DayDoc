@@ -59,7 +59,10 @@ struct InitCmd {
 struct CaptureCmd {
     #[argh(positional)]
     /// the text, a path to a file, or - for stdin
-    text: String,
+    input: Option<String>,
+    #[argh(option)]
+    /// the text, for captures that start with a dash
+    text: Option<String>,
     #[argh(option)]
     /// force a type instead of classifying
     kind: Option<String>,
@@ -335,7 +338,17 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
 
         Sub::Capture(cmd) => {
             let vault = open_vault(explicit)?;
-            let text = read_text(&cmd.text)?;
+            let raw = match (cmd.input, cmd.text) {
+                (Some(input), _) => input,
+                (None, Some(text)) => text,
+                (None, None) => {
+                    return Err(DayDocError::Config(
+                        "nothing to capture: pass the text, --text \"…\", or - for stdin"
+                            .to_string(),
+                    ))
+                }
+            };
+            let text = read_text(&raw)?;
             if cmd.preview {
                 let classification = capture::preview(&text);
                 println!(
