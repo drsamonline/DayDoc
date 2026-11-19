@@ -206,8 +206,14 @@ impl Config {
 
         match key.trim() {
             "llm_mode" => {
-                self.llm_mode = value.to_ascii_lowercase();
-                Ok(self.llm_mode.clone())
+                let mode = value.to_ascii_lowercase();
+                if !matches!(mode.as_str(), "off" | "byok" | "auto") {
+                    return Err(DayDocError::Config(format!(
+                        "llm_mode must be \"off\", \"byok\" or \"auto\", not \"{value}\""
+                    )));
+                }
+                self.llm_mode = mode.clone();
+                Ok(mode)
             }
             "llm_provider" => {
                 self.llm_provider = value.to_string();
