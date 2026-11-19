@@ -122,6 +122,11 @@ replay      replay staged writes after a crash
 status      vault counts and open threads
 ```
 
+## Licence
+
+Not chosen yet. Add a `LICENSE` file and the matching `license` field in
+`Cargo.toml` before publishing binaries.
+
 ## Status
 
 Tier 0 core is implemented and tested: vault, ledger, supersession and revert,

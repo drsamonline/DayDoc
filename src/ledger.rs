@@ -196,7 +196,12 @@ pub fn create(vault: &Vault, new: &NewDecision) -> Result<Note> {
     note.frontmatter.title = title.to_string();
     note.frontmatter.status = Some(new.status.as_str().to_string());
     note.frontmatter.owner = new.owner.clone();
-    note.frontmatter.decided_at = Some(date.clone());
+    // A proposed decision has not been decided yet; only an accepted one is dated.
+    note.frontmatter.decided_at = if new.status == DecisionStatus::Accepted {
+        Some(date.clone())
+    } else {
+        new.decided_at.clone()
+    };
     note.frontmatter.supersedes = supersedes.clone();
     note.frontmatter.source = new.source.clone();
     note.frontmatter.last_verified = Some(date.clone());
