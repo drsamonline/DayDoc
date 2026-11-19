@@ -77,7 +77,7 @@ fn init_then_capture_then_ledger() {
 
     let out = sandbox.ok(&["decisions"]);
     assert_contains(&out, "DR-0001");
-    assert_contains(&out, "Use Okta");
+    assert_contains(&out, "Adopt Okta");
 
     let note = sandbox.read("decisions/DR-0001.md");
     assert_contains(&note, "type: decision");
