@@ -10,7 +10,7 @@ use crate::sop;
 use crate::stale;
 use crate::summarize::extractive_summary;
 use crate::types::{DecisionStatus, NoteType};
-use crate::vault::{now_iso, today, Vault};
+use crate::vault::{now_iso, Vault};
 
 pub fn daily_rel(date: &str) -> String {
     format!("daily/{date}.md")
@@ -299,6 +299,7 @@ pub fn write_digest(vault: &Vault, date: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::ledger::NewDecision;
+    use crate::vault::today;
     use crate::vault::test_support::temp_vault;
 
     #[test]

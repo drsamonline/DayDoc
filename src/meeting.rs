@@ -223,7 +223,7 @@ pub fn extract_action_items(text: &str) -> Vec<String> {
     for line in text.lines() {
         if let Some(caps) = action_re().captures(line) {
             if let Some(m) = caps.get(1) {
-                let item = m.trim().trim_end_matches('.').to_string();
+                let item = m.as_str().trim().trim_end_matches('.').to_string();
                 if !item.is_empty() && !items.contains(&item) {
                     items.push(item);
                 }
