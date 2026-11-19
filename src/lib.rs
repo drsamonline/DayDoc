@@ -12,6 +12,7 @@
 #![warn(missing_debug_implementations)]
 
 pub mod attach;
+pub mod backup;
 pub mod capture;
 pub mod classify;
 pub mod cluster;
@@ -21,6 +22,7 @@ pub mod error;
 pub mod frontmatter;
 pub mod handover;
 pub mod ids;
+pub mod index;
 pub mod ledger;
 pub mod meeting;
 pub mod migrate;

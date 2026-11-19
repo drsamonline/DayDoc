@@ -6,6 +6,8 @@
 
 use std::collections::BTreeSet;
 
+use serde::Serialize;
+
 use crate::error::Result;
 use crate::ledger::{self, DecisionCard};
 use crate::note::Note;
@@ -99,7 +101,7 @@ impl Filters {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SearchHit {
     pub rel_path: String,
     pub title: String,

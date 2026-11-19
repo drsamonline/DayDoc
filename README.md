@@ -87,6 +87,12 @@ History is never edited.
   classified, nothing is overwritten.
 - **Project auto-clustering.** Five or more notes in seven days sharing a client
   domain or a person propose a project folder. Accepting files the members.
+- **Backups with retention.** A dated `.tar.gz` of the vault, last 7 daily,
+  4 weekly, 6 monthly. Backups live in the state directory, not inside the
+  vault they protect.
+- **Identity guard.** Change a note's `id` and the file is a new note: the old
+  id stays in the index and a warning lands in `_meta/warnings/`.
+- **`--json` on `decisions`, `search`, `stale` and `status`** for scripting.
 
 An optional LLM (BYOK or a local server) adds abstractive summaries and chat.
 It is off by default, there is no download prompt, and no feature above needs
@@ -121,6 +127,8 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+backup      write a dated .tar.gz and apply 7/4/6 retention
+check       identity check plus trash purge
 import      import an existing Markdown folder (dry-run preview)
 cluster     propose project folders from notes that cluster
 attach      store a file content-addressed under assets/

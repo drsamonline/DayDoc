@@ -8,7 +8,8 @@ use argh::FromArgs;
 use daydoc::error::DayDocError;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, capture, cluster, daily, handover, ledger, meeting, migrate, search, sop, stale, Vault,
+    attach, backup, capture, cluster, daily, handover, index, ledger, meeting, migrate, search, sop,
+    stale, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -45,6 +46,8 @@ enum Sub {
     Wrap(WrapCmd),
     Digest(DigestCmd),
     Sop(SopCmd),
+    Backup(BackupCmd),
+    Check(CheckCmd),
     Import(ImportCmd),
     Cluster(ClusterCmd),
     Attach(AttachCmd),
@@ -105,6 +108,9 @@ struct DecisionsCmd {
     #[argh(option)]
     /// filter by status: proposed, accepted, superseded, rejected
     status: Option<String>,
+    #[argh(switch)]
+    /// print json instead of cards
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -171,6 +177,9 @@ struct SearchCmd {
     #[argh(positional)]
     /// what to look for
     query: String,
+    #[argh(switch)]
+    /// print json instead of hits
+    json: bool,
     #[argh(option)]
     /// filter by note type
     kind: Option<String>,
@@ -197,7 +206,11 @@ struct AskCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "stale")]
 /// show every note that is stale or contradicts the ledger
-struct StaleCmd {}
+struct StaleCmd {
+    #[argh(switch)]
+    /// print json instead of flags
+    json: bool,
+}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "verify")]
@@ -269,6 +282,23 @@ struct SopCmd {
 }
 
 #[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "backup")]
+/// write a dated .tar.gz of the vault and apply retention
+struct BackupCmd {
+    #[argh(option)]
+    /// folder to write backups into (default: the state directory)
+    out: Option<String>,
+    #[argh(switch)]
+    /// show the plan, write nothing
+    dry_run: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "check")]
+/// identity check plus trash purge in one pass
+struct CheckCmd {}
+
+#[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "import")]
 /// import an existing Markdown folder, with a dry-run preview
 struct ImportCmd {
@@ -317,7 +347,11 @@ struct ReplayCmd {}
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "status")]
 /// vault counts and open threads
-struct StatusCmd {}
+struct StatusCmd {
+    #[argh(switch)]
+    /// print json instead of a summary
+    json: bool,
+}
 
 fn main() -> ExitCode {
     let args: TopLevel = argh::from_env();
@@ -373,6 +407,13 @@ fn parse_kind(raw: &str) -> daydoc::Result<NoteType> {
             "unknown note type \"{raw}\"; try daily, meeting, decision, task, idea, sop, project-update, reference"
         ))
     })
+}
+
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string_pretty(value) {
+        Ok(text) => println!("{text}"),
+        Err(err) => eprintln!("daydoc: could not serialise: {err}"),
+    }
 }
 
 fn today_or(raw: Option<String>) -> String {
@@ -489,19 +530,21 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 })?),
                 None => None,
             };
-            let mut shown = 0;
-            for card in ledger::cards(&vault)? {
-                if let Some(wanted) = wanted {
-                    if card.status != wanted {
-                        continue;
-                    }
-                }
+            let cards: Vec<ledger::DecisionCard> = ledger::cards(&vault)?
+                .into_iter()
+                .filter(|card| wanted.map(|w| card.status == w).unwrap_or(true))
+                .collect();
+            if cmd.json {
+                print_json(&cards);
+                return Ok(ExitCode::SUCCESS);
+            }
+            if cards.is_empty() {
+                println!("no decisions yet — `daydoc capture \"we decided to ...\"`");
+                return Ok(ExitCode::SUCCESS);
+            }
+            for card in &cards {
                 print!("{}", card.render());
                 println!();
-                shown += 1;
-            }
-            if shown == 0 {
-                println!("no decisions yet — `daydoc capture \"we decided to ...\"`");
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -581,6 +624,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             filters.project = cmd.project;
             filters.status = cmd.status;
             let hits = search::search(&vault, &cmd.query, &filters)?;
+            if cmd.json {
+                print_json(&hits);
+                return Ok(ExitCode::SUCCESS);
+            }
             if hits.is_empty() {
                 println!("no matches");
                 return Ok(ExitCode::SUCCESS);
@@ -605,9 +652,13 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Sub::Stale(_) => {
+        Sub::Stale(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let flags = stale::scan(&vault)?;
+            if cmd.json {
+                print_json(&flags);
+                return Ok(ExitCode::SUCCESS);
+            }
             if flags.is_empty() {
                 println!("nothing is stale");
                 return Ok(ExitCode::SUCCESS);
@@ -706,6 +757,43 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
+        Sub::Backup(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let dir = cmd
+                .out
+                .map(PathBuf::from)
+                .unwrap_or_else(|| backup::default_dir(&vault));
+            if cmd.dry_run {
+                let existing = backup::existing(&dir);
+                let name = format!(
+                    "daydoc-{}.tar.gz",
+                    chrono::Local::now().format("%Y-%m-%d")
+                );
+                println!("{} backup(s) in {}", existing.len(), dir.display());
+                println!("would write {}", dir.join(name).display());
+                return Ok(ExitCode::SUCCESS);
+            }
+            let report = backup::run(&vault, &dir)?;
+            print!("{}", report.render());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Check(_) => {
+            let vault = open_vault(explicit, read_only)?;
+            let changes = index::check_identity(&vault)?;
+            let purged = vault.purge_trash()?;
+            if changes.is_empty() {
+                println!("note identities stable");
+            } else {
+                for change in &changes {
+                    println!("{}", change.describe());
+                }
+                println!("{} warning(s) written to _meta/warnings/", changes.len());
+            }
+            println!("purged {purged} trash file(s)");
+            Ok(ExitCode::SUCCESS)
+        }
+
         Sub::Import(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let source = PathBuf::from(&cmd.path);
@@ -791,11 +879,29 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Sub::Status(_) => {
+        Sub::Status(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let scan = vault.scan()?;
             let cards = ledger::cards(&vault)?;
             let flags = stale::scan(&vault)?;
+            if cmd.json {
+                let summary = serde_json::json!({
+                    "vault": vault.root().display().to_string(),
+                    "notes": scan.notes.len(),
+                    "broken": scan.broken.len(),
+                    "decisions": cards.len(),
+                    "proposed": cards.iter().filter(|c| c.status == DecisionStatus::Proposed).count(),
+                    "accepted": cards.iter().filter(|c| c.status == DecisionStatus::Accepted).count(),
+                    "stale": flags.len(),
+                    "llm_mode": vault.config().llm_mode,
+                    "read_only": vault.is_read_only(),
+                });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&summary).unwrap_or_default()
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
             println!("vault   {}", vault.root().display());
             println!("notes   {}", scan.notes.len());
             if !scan.broken.is_empty() {

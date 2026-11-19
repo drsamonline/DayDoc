@@ -2,8 +2,11 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 /// The note types the intent classifier can assign.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum NoteType {
     Daily,
     Meeting,
@@ -95,7 +98,8 @@ impl fmt::Display for NoteType {
 }
 
 /// The decision lifecycle. `accepted` never goes stale — it is superseded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum DecisionStatus {
     Proposed,
     Accepted,

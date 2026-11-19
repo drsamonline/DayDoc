@@ -275,3 +275,52 @@ fn read_only_flag_blocks_writes() {
     assert!(!output.status.success());
     assert!(!sandbox.exists("decisions/DR-0001.md"));
 }
+
+#[test]
+fn backup_writes_a_tarball_into_the_state_directory() {
+    let sandbox = Sandbox::new("backup");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+
+    let out = sandbox.ok(&["backup"]);
+    assert_contains(&out, "daydoc-");
+    assert_contains(&out, "file(s)");
+
+    let written = std::fs::read_dir(sandbox.state().join("backups"))
+        .expect("backups dir")
+        .count();
+    assert_eq!(written, 1);
+
+    let out = sandbox.ok(&["backup", "--dry-run"]);
+    assert_contains(&out, "would write");
+}
+
+#[test]
+fn json_output_is_parseable() {
+    let sandbox = Sandbox::new("json");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    sandbox.ok(&["accept", "DR-0001"]);
+
+    let decisions = sandbox.ok(&["decisions", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&decisions).expect("decisions json");
+    assert_eq!(parsed[0]["decision_id"], "DR-0001");
+    assert_eq!(parsed[0]["status"], "accepted");
+
+    let status = sandbox.ok(&["status", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&status).expect("status json");
+    assert_eq!(parsed["decisions"], 1);
+    assert_eq!(parsed["llm_mode"], "off");
+
+    let stale = sandbox.ok(&["stale", "--json"]);
+    serde_json::from_str::<serde_json::Value>(&stale).expect("stale json");
+}
+
+#[test]
+fn check_reports_stable_identities() {
+    let sandbox = Sandbox::new("check");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    let out = sandbox.ok(&["check"]);
+    assert_contains(&out, "identities stable");
+}

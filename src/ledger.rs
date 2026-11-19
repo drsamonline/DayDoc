@@ -6,6 +6,7 @@
 //! new one that supersedes it.
 
 use rusqlite::{params, OptionalExtension, TransactionBehavior};
+use serde::Serialize;
 
 use crate::error::{DayDocError, Result};
 use crate::ids;
@@ -88,7 +89,7 @@ impl NewDecision {
 
 /// A one-line result card: what was decided, when, by whom, and what it
 /// replaced. Search returns these instead of prose.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DecisionCard {
     pub decision_id: String,
     pub title: String,

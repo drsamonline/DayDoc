@@ -6,6 +6,8 @@
 
 use std::collections::BTreeMap;
 
+use serde::Serialize;
+
 use crate::error::Result;
 use crate::ids;
 use crate::note::Note;
@@ -15,7 +17,8 @@ use crate::vault::{now_iso, today, Vault};
 pub const DEPARTED_ROSTER: &str = "_meta/people/departed.md";
 pub const RENAMED_ROSTER: &str = "_meta/projects/renamed.md";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum StaleReason {
     Age { days: i64, threshold: i64 },
     CitesSuperseded { decision: String, superseded_by: String },
@@ -39,7 +42,7 @@ impl StaleReason {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StaleFlag {
     pub rel_path: String,
     pub title: String,
