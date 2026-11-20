@@ -165,8 +165,14 @@ pub fn wrap_data(vault: &Vault, date: &str) -> Result<WrapData> {
     let mut touched: Vec<String> = Vec::new();
     let mut tasks: Vec<String> = Vec::new();
     let mut prose: Vec<String> = Vec::new();
+    let destination = daily_rel(date);
     for note in &notes {
         if note.note_type() == NoteType::Decision {
+            continue;
+        }
+        // The daily note is where the wrap goes. Summarising it would fold the
+        // previous wrap into the next one, and grow on every run.
+        if note.rel_path == destination {
             continue;
         }
         if date_of(note) != date {
@@ -180,7 +186,10 @@ pub fn wrap_data(vault: &Vault, date: &str) -> Result<WrapData> {
             note.note_type(),
             NoteType::Inbox | NoteType::Idea | NoteType::Daily
         ) {
-            prose.push(note.body.clone());
+            let body = note.body.split("## End of day").next().unwrap_or("");
+            if !body.trim().is_empty() {
+                prose.push(body.to_string());
+            }
         }
     }
     touched.sort();
@@ -216,33 +225,30 @@ pub fn write_wrap(vault: &Vault, date: &str) -> Result<String> {
 
     // Replace the wrap section only. Anything the user wrote after the next
     // heading is theirs and must survive.
-    let mut body = note.body.clone();
     const HEADING: &str = "## End of day";
-    match body.find(HEADING) {
-        Some(start) => {
-            let after = start + HEADING.len();
-            let tail = body[after..]
-                .find("\n## ")
-                .map(|offset| body[after + offset..].to_string())
-                .unwrap_or_default();
-            body.truncate(start);
-            body.push_str(HEADING);
-            body.push_str("\n\n");
-            body.push_str(&section);
-            body.push('\n');
-            body.push_str(&tail);
-        }
-        None => {
-            if !body.ends_with('\n') {
-                body.push('\n');
-            }
-            body.push('\n');
-            body.push_str(HEADING);
-            body.push_str("\n\n");
-            body.push_str(&section);
-            body.push('\n');
-        }
+    let mut body = note.body.clone();
+
+    // Drop every existing wrap section, wherever it sits, so a note that
+    // collected copies (or was edited by hand) ends up with exactly one.
+    let mut insert_at = body.len();
+    while let Some(start) = body.find(HEADING) {
+        let after = start + HEADING.len();
+        let end = body[after..]
+            .find("\n## ")
+            .map(|offset| after + offset)
+            .unwrap_or(body.len());
+        body.replace_range(start..end, "");
+        insert_at = insert_at.min(start);
     }
+    if !body.ends_with('\n') {
+        body.push('\n');
+    }
+    let insert_at = insert_at.min(body.len());
+    let mut replacement = String::from(HEADING);
+    replacement.push_str("\n\n");
+    replacement.push_str(&section);
+    replacement.push('\n');
+    body.insert_str(insert_at, &replacement);
     note.body = body;
     note.frontmatter.updated = Some(now_iso());
     vault.save(&note)?;
