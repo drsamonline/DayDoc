@@ -6,6 +6,7 @@
 //! rather than silently rewriting the past.
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 
 use crate::error::{DayDocError, Result};
 use crate::ids;
@@ -41,7 +42,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS note_fts USING fts5(
 );
 ";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct ReindexReport {
     pub indexed: usize,
     pub broken: usize,
@@ -240,7 +241,7 @@ pub fn candidates(vault: &Vault, tokens: &[String]) -> Option<Vec<String>> {
     Some(out)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IdentityChange {
     pub rel_path: String,
     pub old_id: String,
