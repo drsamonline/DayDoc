@@ -611,3 +611,50 @@ fn capture_preview_honours_a_forced_kind() {
         .unwrap_or(0);
     assert_eq!(written, 0, "preview wrote a note");
 }
+
+#[test]
+fn a_meeting_note_inside_the_vault_can_be_given_as_an_absolute_path() {
+    let sandbox = Sandbox::new("meeting-abs");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let note = sandbox.vault().join("meetings/kickoff.md");
+    std::fs::create_dir_all(sandbox.vault().join("meetings")).expect("dir");
+    std::fs::write(
+        &note,
+        "---\ntype: meeting\ntitle: Kickoff\n---\nBob: we decided to move billing to Razorpay.\n- [ ] Priya will prepare the checklist\n",
+    )
+    .expect("write note");
+
+    let out = sandbox.ok(&[
+        "meeting",
+        note.to_str().unwrap(),
+        "--approve",
+        "1",
+        "--actions",
+    ]);
+    assert_contains(&out, "recorded DR-0001");
+    assert_contains(&out, "wrote 1 action item(s) into meetings/kickoff.md");
+
+    // The source is recorded as a vault-relative path, not the absolute one.
+    let decision = sandbox.read("decisions/DR-0001.md");
+    assert_contains(&decision, "source: meetings/kickoff.md");
+
+    // And the action item landed in the note.
+    let updated = std::fs::read_to_string(&note).expect("read note");
+    assert_contains(&updated, "prepare the checklist");
+}
+
+#[test]
+fn candidate_cards_count_up_instead_of_repeating_one_reference() {
+    let sandbox = Sandbox::new("meeting-cards");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let note = sandbox.vault().join("transcript.txt");
+    std::fs::write(
+        &note,
+        "we decided to adopt Okta for SSO.\nfinal call is to move billing to Razorpay.\n",
+    )
+    .expect("write");
+
+    let out = sandbox.ok(&["meeting", note.to_str().unwrap()]);
+    assert_contains(&out, "approve as DR-0001?");
+    assert_contains(&out, "approve as DR-0002?");
+}

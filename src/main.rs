@@ -668,6 +668,28 @@ fn run_sync(
     }
 }
 
+/// A path inside the vault is used as a vault-relative path, so `--actions` can
+/// write into it. A transcript outside the vault keeps its own path, as
+/// provenance for the decisions it produced.
+fn resolve_source(vault: &Vault, arg: &str) -> String {
+    let path = PathBuf::from(arg);
+    if path.is_absolute() {
+        if let (Ok(root), Ok(full)) = (vault.root().canonicalize(), path.canonicalize()) {
+            if full.starts_with(&root) {
+                return vault.rel_of(&full);
+            }
+        }
+    }
+    arg.to_string()
+}
+
+fn advance_reference(reference: &str, by: u64) -> String {
+    match daydoc::ids::parse_decision_id(reference) {
+        Some(number) => daydoc::ids::decision_id(number + by),
+        None => reference.to_string(),
+    }
+}
+
 fn normalise_key_name(raw: &str) -> daydoc::Result<String> {
     let name = raw.trim().to_ascii_lowercase();
     if matches!(name.as_str(), "backup" | "llm") {
@@ -749,6 +771,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Meeting(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let raw = read_text(&cmd.file)?;
+            let source = resolve_source(&vault, &cmd.file);
             // A meeting note keeps its frontmatter; a raw transcript has none.
             let text = match daydoc::frontmatter::split(&raw) {
                 Ok((_, body)) => body,
@@ -760,7 +783,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
 
             if cmd.json {
                 print_json(&serde_json::json!({
-                    "file": cmd.file,
+                    "file": source,
                     "next_reference": next,
                     "candidates": candidates,
                     "action_items": actions,
@@ -768,9 +791,11 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 return Ok(ExitCode::SUCCESS);
             }
 
-            println!("{} candidate(s) in {}", candidates.len(), cmd.file);
+            println!("{} candidate(s) in {}", candidates.len(), source);
             for (i, candidate) in candidates.iter().enumerate() {
-                println!("  {}. {}", i + 1, candidate.card(&next));
+                // Each approved candidate takes the next number in turn.
+                let reference = advance_reference(&next, i as u64);
+                println!("  {}. {}", i + 1, candidate.card(&reference));
             }
             if !actions.is_empty() {
                 println!("{} action item(s):", actions.len());
@@ -798,10 +823,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             }
 
             if chosen.is_empty() {
-                println!("\nrun `daydoc meeting {} --approve 1,2` to record these", cmd.file);
+                println!("\nrun `daydoc meeting {} --approve 1,2` to record these", source);
                 return Ok(ExitCode::SUCCESS);
             }
-            let written = meeting::approve(&vault, &cmd.file, &chosen)?;
+            let written = meeting::approve(&vault, &source, &chosen)?;
             for note in &written {
                 println!(
                     "recorded {} — {}",
@@ -810,8 +835,14 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 );
             }
             if cmd.actions {
-                let added = meeting::append_action_items(&vault, &cmd.file, &actions)?;
-                println!("wrote {added} action item(s) into {}", cmd.file);
+                if !vault.exists(&source) {
+                    return Err(DayDocError::Config(format!(
+                        "cannot write action items into {source}: it is not inside the vault. \
+                         Copy it in first, or drop --actions."
+                    )));
+                }
+                let added = meeting::append_action_items(&vault, &source, &actions)?;
+                println!("wrote {added} action item(s) into {source}");
             }
             Ok(ExitCode::SUCCESS)
         }
