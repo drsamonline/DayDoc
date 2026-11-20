@@ -263,8 +263,13 @@ pub fn parse_response(provider: &str, value: &Value) -> Result<String> {
         .ok_or_else(|| DayDocError::Llm(format!("{provider} response had no text")))
 }
 
-/// The key, from the environment for now. The OS keychain is the next step; a
-/// key never enters the config file and never appears in a log or a preview.
+/// The key for this vault: the secret store first, then the usual provider
+/// variables. It never enters the config file and never appears in a log, a
+/// preview or a request body.
+pub fn api_key(vault: &Vault) -> Option<String> {
+    crate::secret::resolve(vault, crate::secret::LLM).or_else(api_key_from_env)
+}
+
 pub fn api_key_from_env() -> Option<String> {
     for name in ["DAYDOC_LLM_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
         if let Ok(value) = std::env::var(name) {
@@ -311,8 +316,10 @@ pub fn ask_with(
                 .to_string(),
         ));
     }
-    let key = api_key_from_env().ok_or_else(|| {
-        DayDocError::Llm("no API key found in DAYDOC_LLM_KEY".to_string())
+    let key = api_key(vault).ok_or_else(|| {
+        DayDocError::Llm(
+            "no API key found: `daydoc key set llm` (reads stdin) or DAYDOC_LLM_KEY".to_string(),
+        )
     })?;
     let plan = plan(vault, question, k)?;
     let request = build_request(&settings, &plan, &key)?;

@@ -16,6 +16,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
 - Stats, config show/set, single-file HTML export
 - Release workflow: Linux and Windows archives plus a `.deb` on `v*` tags
+- Encrypted backups (AES-256-GCM), restore, and a key store with a `0600` file
 - Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
   shapes for OpenAI-compatible, Anthropic and Gemini
 - Watcher: debounced reindex plus timed commit for external edits
@@ -41,8 +42,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 3. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
    `Ctrl+Shift+K`, morning plan on `Ctrl+Shift+M`, tray badge for stale notes
    and the re-verify entry point.
-3. **Backup encryption.** AES-256-GCM with the key in the OS keychain;
-   `backup_encrypt = true` refuses to run until this lands.
+3. **OS keychain.** Move the key store from a `0600` file to the platform
+   keychain behind the existing `KeyStore` trait.
 4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
 5. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.

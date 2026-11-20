@@ -10,15 +10,19 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use chrono::{Datelike, Duration, NaiveDate};
+use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use tar::Builder;
+use tar::{Archive, Builder};
 
 use crate::error::{DayDocError, Result};
+use crate::secret;
 use crate::vault::Vault;
+use crate::{crypto, ids};
 
 pub const PREFIX: &str = "daydoc-";
 pub const SUFFIX: &str = ".tar.gz";
+pub const ENCRYPTED_SUFFIX: &str = ".tar.gz.enc";
 pub const DAILY_KEEP: usize = 7;
 pub const WEEKLY_KEEP: usize = 4;
 pub const MONTHLY_KEEP: usize = 6;
@@ -33,6 +37,7 @@ pub struct BackupReport {
     pub files: usize,
     pub pruned: Vec<String>,
     pub kept: usize,
+    pub encrypted: bool,
 }
 
 impl BackupReport {
@@ -51,8 +56,8 @@ impl BackupReport {
     }
 }
 
-fn add_tree(
-    builder: &mut Builder<GzEncoder<std::fs::File>>,
+fn add_tree<W: std::io::Write>(
+    builder: &mut Builder<W>,
     root: &Path,
     dir: &Path,
     files: &mut usize,
@@ -83,7 +88,10 @@ fn add_tree(
 }
 
 fn parse_name(name: &str) -> Option<NaiveDate> {
-    let stem = name.strip_prefix(PREFIX)?.strip_suffix(SUFFIX)?;
+    let rest = name.strip_prefix(PREFIX)?;
+    let stem = rest
+        .strip_suffix(ENCRYPTED_SUFFIX)
+        .or_else(|| rest.strip_suffix(SUFFIX))?;
     NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
 }
 
@@ -161,34 +169,43 @@ pub fn existing(out_dir: &Path) -> Vec<(PathBuf, NaiveDate)> {
     found
 }
 
-/// Write today's backup and apply retention.
+/// Write today's backup and apply retention. Encrypted backups are written as
+/// `.tar.gz.enc` and refuse to be written at all without a key.
 pub fn run(vault: &Vault, out_dir: &Path) -> Result<BackupReport> {
-    if vault.config().backup_encrypt {
-        return Err(DayDocError::Config(
-            "backup_encrypt = true needs the OS keychain integration, which is not built yet; refusing to write an unencrypted backup"
-                .to_string(),
-        ));
-    }
+    let encrypt = vault.config().backup_encrypt;
+    let key = if encrypt {
+        let text = secret::resolve(vault, secret::BACKUP).ok_or_else(|| {
+            DayDocError::Config(
+                "backup_encrypt = true but no backup key is set. Create one with \
+                 `daydoc key set backup --generate`, or set DAYDOC_BACKUP_KEY."
+                    .to_string(),
+            )
+        })?;
+        Some(crypto::key_from_text(&text)?)
+    } else {
+        None
+    };
+
     std::fs::create_dir_all(out_dir).map_err(|e| DayDocError::io(out_dir, e))?;
 
     let today = chrono::Local::now().date_naive();
-    let name = format!("{PREFIX}{}{SUFFIX}", today.format("%Y-%m-%d"));
+    let suffix = if encrypt { ENCRYPTED_SUFFIX } else { SUFFIX };
+    let name = format!("{PREFIX}{}{suffix}", today.format("%Y-%m-%d"));
     let path = out_dir.join(&name);
-    let tmp = out_dir.join(format!(".{name}.tmp"));
+    let tmp = out_dir.join(format!(".{}-{}.tmp", name, ids::new_ulid()));
 
     let mut files = 0usize;
-    {
-        let file = std::fs::File::create(&tmp).map_err(|e| DayDocError::io(&tmp, e))?;
-        let encoder = GzEncoder::new(file, Compression::default());
-        let mut builder = Builder::new(encoder);
-        add_tree(&mut builder, vault.root(), vault.root(), &mut files)?;
-        let encoder = builder
-            .into_inner()
-            .map_err(|e| DayDocError::io(&tmp, e))?;
-        let mut file = encoder.finish().map_err(|e| DayDocError::io(&tmp, e))?;
-        file.flush().map_err(|e| DayDocError::io(&tmp, e))?;
-        file.sync_all().map_err(|e| DayDocError::io(&tmp, e))?;
-    }
+    let encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let mut builder = Builder::new(encoder);
+    add_tree(&mut builder, vault.root(), vault.root(), &mut files)?;
+    let encoder = builder.into_inner().map_err(|e| DayDocError::io(&tmp, e))?;
+    let archive = encoder.finish().map_err(|e| DayDocError::io(&tmp, e))?;
+
+    let payload = match &key {
+        Some(key) => crypto::encrypt(key, &archive)?,
+        None => archive,
+    };
+    std::fs::write(&tmp, &payload).map_err(|e| DayDocError::io(&tmp, e))?;
     std::fs::rename(&tmp, &path).map_err(|e| DayDocError::io(&path, e))?;
     let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
 
@@ -215,7 +232,11 @@ pub fn run(vault: &Vault, out_dir: &Path) -> Result<BackupReport> {
     vault.audit(
         "backup",
         &name,
-        &format!("{files} files, {bytes} bytes, {} pruned", pruned.len()),
+        &format!(
+            "{files} files, {bytes} bytes, {}{} pruned",
+            if encrypt { "encrypted, " } else { "" },
+            pruned.len()
+        ),
     )?;
 
     Ok(BackupReport {
@@ -224,7 +245,51 @@ pub fn run(vault: &Vault, out_dir: &Path) -> Result<BackupReport> {
         files,
         pruned,
         kept,
+        encrypted: encrypt,
     })
+}
+
+#[derive(Debug, Clone)]
+pub struct RestoreReport {
+    pub files: usize,
+    pub encrypted: bool,
+}
+
+/// Unpack a backup. Entry paths that would escape `dest` are skipped, not
+/// followed.
+pub fn restore(file: &Path, dest: &Path, key: Option<&str>) -> Result<RestoreReport> {
+    let payload = std::fs::read(file).map_err(|e| DayDocError::io(file, e))?;
+    let (data, encrypted) = if crypto::is_encrypted(&payload) {
+        let text = key.ok_or_else(|| {
+            DayDocError::Config(
+                "this backup is encrypted; set the backup key first with \
+                 `daydoc key set backup` or DAYDOC_BACKUP_KEY"
+                    .to_string(),
+            )
+        })?;
+        let key = crypto::key_from_text(text)?;
+        (crypto::decrypt(&key, &payload)?, true)
+    } else {
+        (payload, false)
+    };
+
+    std::fs::create_dir_all(dest).map_err(|e| DayDocError::io(dest, e))?;
+    let decoder = GzDecoder::new(&data[..]);
+    let mut archive = Archive::new(decoder);
+    let mut files = 0usize;
+    let entries = archive
+        .entries()
+        .map_err(|e| DayDocError::Config(format!("not a tar.gz archive: {e}")))?;
+    for entry in entries {
+        let mut entry = entry.map_err(|e| DayDocError::Config(format!("bad entry: {e}")))?;
+        let unpacked = entry
+            .unpack_in(dest)
+            .map_err(|e| DayDocError::io(dest, e))?;
+        if unpacked {
+            files += 1;
+        }
+    }
+    Ok(RestoreReport { files, encrypted })
 }
 
 /// Where backups go unless told otherwise.
@@ -290,11 +355,73 @@ mod tests {
     }
 
     #[test]
-    fn encryption_fails_closed() {
+    fn encryption_fails_closed_without_a_key() {
         let mut vault = temp_vault();
         vault.config_mut().backup_encrypt = true;
         let dir = vault.state_dir().join("backups");
-        assert!(run(&vault, &dir).is_err());
+        let err = run(&vault, &dir).expect_err("no key, no backup");
+        assert!(err.to_string().contains("backup key"));
         assert!(!dir.exists() || existing(&dir).is_empty());
+    }
+
+    #[test]
+    fn an_encrypted_backup_round_trips_through_restore() {
+        let vault = temp_vault();
+        vault
+            .write(
+                "inbox/a.md",
+                "---\nid: 01A\ntype: idea\ntitle: A\n---\nbody\n",
+            )
+            .expect("write");
+        let key = crypto::new_key_hex().expect("key");
+        secret::set(&vault, secret::BACKUP, &key).expect("store key");
+
+        let mut vault = vault;
+        vault.config_mut().backup_encrypt = true;
+        let dir = vault.state_dir().join("backups");
+        let report = run(&vault, &dir).expect("backup");
+        assert!(report.encrypted);
+        assert!(report.path.to_string_lossy().ends_with(".tar.gz.enc"));
+
+        let payload = std::fs::read(&report.path).expect("read");
+        assert!(crypto::is_encrypted(&payload));
+        assert!(!String::from_utf8_lossy(&payload).contains("title: A"));
+
+        let dest = vault.state_dir().join("restored");
+        let restored = restore(&report.path, &dest, Some(&key)).expect("restore");
+        assert!(restored.encrypted);
+        assert!(restored.files >= 2);
+        let text = std::fs::read_to_string(dest.join("inbox/a.md")).expect("restored note");
+        assert!(text.contains("title: A"));
+    }
+
+    #[test]
+    fn restoring_an_encrypted_backup_without_a_key_fails_closed() {
+        let vault = temp_vault();
+        let key = crypto::new_key_hex().expect("key");
+        secret::set(&vault, secret::BACKUP, &key).expect("store key");
+        let mut vault = vault;
+        vault.config_mut().backup_encrypt = true;
+        let dir = vault.state_dir().join("backups");
+        let report = run(&vault, &dir).expect("backup");
+        let dest = vault.state_dir().join("restored");
+        let err = restore(&report.path, &dest, None).expect_err("no key");
+        assert!(err.to_string().contains("encrypted"));
+        assert!(!dest.join("inbox").exists());
+    }
+
+    #[test]
+    fn a_plaintext_backup_restores_without_a_key() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/b.md", "---\nid: 01B\ntype: idea\ntitle: B\n---\nbody\n")
+            .expect("write");
+        let dir = vault.state_dir().join("backups");
+        let report = run(&vault, &dir).expect("backup");
+        assert!(!report.encrypted);
+        let dest = vault.state_dir().join("restored");
+        let restored = restore(&report.path, &dest, None).expect("restore");
+        assert!(!restored.encrypted);
+        assert!(dest.join("inbox/b.md").exists());
     }
 }

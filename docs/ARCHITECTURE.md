@@ -67,6 +67,8 @@ number. Deleting a note never frees its number: a reference must not be reused.
 | Read-only vault | Every write path returns `ReadOnly`, replay skipped |
 | Windows file lock | Retry on os error 32/33 with 1→16 s backoff |
 | Trash delete | Symlinks refused; canonical path must be inside the vault |
+| Encrypted backup with no key | Nothing is written; the error names the command to fix it |
+| Wrong or missing key on restore | Decryption fails closed; no partial files are created |
 
 ## Deliberately absent
 

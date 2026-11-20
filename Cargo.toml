@@ -28,6 +28,7 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 git2 = { version = "0.20", default-features = false, optional = true }
 notify = { version = "6", default-features = false }
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+ring = { version = "0.17", default-features = false, features = ["alloc", "std"] }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

@@ -490,3 +490,60 @@ fn chat_preview_shows_the_payload_without_sending() {
     assert_contains(&out, "DR-0001");
     assert_contains(&out, "--- system ---");
 }
+
+#[test]
+fn keys_are_stored_shown_and_cleared_without_printing_values() {
+    let sandbox = Sandbox::new("keys");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+
+    let out = sandbox.ok(&["key", "show", "backup"]);
+    assert_contains(&out, "not set");
+
+    let generated = sandbox.ok(&["key", "set", "backup", "--generate"]);
+    assert_contains(&generated, "generated key");
+    let key = generated
+        .lines()
+        .find(|line| line.len() == 64 && line.chars().all(|c| c.is_ascii_hexdigit()))
+        .expect("a hex key was printed once")
+        .to_string();
+
+    let out = sandbox.ok(&["key", "show", "backup"]);
+    assert_contains(&out, "set");
+    assert!(!out.contains(&key), "show printed the key");
+
+    let output = sandbox.run(&["key", "set", "nonsense"]);
+    assert!(!output.status.success());
+
+    let out = sandbox.ok(&["key", "clear", "backup"]);
+    assert_contains(&out, "cleared");
+}
+
+#[test]
+fn an_encrypted_backup_can_be_restored() {
+    let sandbox = Sandbox::new("encrypted");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    sandbox.ok(&["key", "set", "backup", "--generate"]);
+    sandbox.ok(&["config", "set", "backup_encrypt", "true"]);
+
+    let out = sandbox.ok(&["backup"]);
+    assert_contains(&out, ".tar.gz.enc");
+    assert_contains(&out, "AES-256-GCM");
+
+    let dir = sandbox.state().join("backups");
+    let file = std::fs::read_dir(&dir)
+        .expect("backups")
+        .next()
+        .expect("one backup")
+        .expect("entry")
+        .path();
+    let dest = sandbox.root.join("restored");
+    let out = sandbox.ok(&[
+        "restore",
+        file.to_str().unwrap(),
+        "--into",
+        dest.to_str().unwrap(),
+    ]);
+    assert_contains(&out, "decrypted");
+    assert!(dest.join("decisions/DR-0001.md").exists());
+}

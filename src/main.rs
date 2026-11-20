@@ -11,8 +11,8 @@ use daydoc::error::DayDocError;
 use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, daily, export, handover, index, ledger, lint, llm, meeting,
-    migrate, search, sop, stale, stats, watch, Vault,
+    attach, backup, capture, cluster, crypto, daily, export, handover, index, ledger, lint, llm,
+    meeting, migrate, search, secret, sop, stale, stats, watch, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -50,6 +50,8 @@ enum Sub {
     Digest(DigestCmd),
     Sop(SopCmd),
     Backup(BackupCmd),
+    Restore(RestoreCmd),
+    Key(KeyCmd),
     Config(ConfigCmd),
     Stats(StatsCmd),
     Export(ExportCmd),
@@ -311,6 +313,64 @@ struct SyncCmd {
     #[argh(switch)]
     /// show what would be committed, write nothing
     dry_run: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "restore")]
+/// unpack a backup into a folder
+struct RestoreCmd {
+    #[argh(positional)]
+    /// the .tar.gz or .tar.gz.enc file
+    file: String,
+    #[argh(option)]
+    /// where to unpack it (default: the state directory)
+    into: Option<String>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "key")]
+/// store, show or clear a key (values are never printed)
+struct KeyCmd {
+    #[argh(subcommand)]
+    action: KeyAction,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand)]
+enum KeyAction {
+    Set(KeySet),
+    Show(KeyShow),
+    Clear(KeyClear),
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "set")]
+/// store a key: read from stdin, or generate one
+struct KeySet {
+    #[argh(positional)]
+    /// which key: backup or llm
+    name: String,
+    #[argh(switch)]
+    /// generate a random 32-byte key and print it once
+    generate: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "show")]
+/// report whether a key is set
+struct KeyShow {
+    #[argh(positional)]
+    /// which key: backup or llm
+    name: String,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "clear")]
+/// remove a stored key
+struct KeyClear {
+    #[argh(positional)]
+    /// which key: backup or llm
+    name: String,
 }
 
 #[derive(FromArgs, Debug)]
@@ -578,6 +638,17 @@ fn run_sync(
         Err(DayDocError::Config(
             "this build has no git support (feature \"git\" is off)".to_string(),
         ))
+    }
+}
+
+fn normalise_key_name(raw: &str) -> daydoc::Result<String> {
+    let name = raw.trim().to_ascii_lowercase();
+    if matches!(name.as_str(), "backup" | "llm") {
+        Ok(name)
+    } else {
+        Err(DayDocError::Config(format!(
+            "unknown key \"{raw}\"; use backup or llm"
+        )))
     }
 }
 
@@ -940,6 +1011,70 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             let note = sop::accept(&vault, &proposals[index - 1])?;
             println!("wrote {}", note.rel_path);
             Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Restore(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let file = PathBuf::from(&cmd.file);
+            let dest = cmd
+                .into
+                .map(PathBuf::from)
+                .unwrap_or_else(|| vault.state_dir().join("restore"));
+            let key = secret::resolve(&vault, secret::BACKUP);
+            let report = backup::restore(&file, &dest, key.as_deref())?;
+            println!(
+                "restored {} file(s) into {}{}",
+                report.files,
+                dest.display(),
+                if report.encrypted { " (decrypted)" } else { "" }
+            );
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Key(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            match cmd.action {
+                KeyAction::Set(set) => {
+                    let name = normalise_key_name(&set.name)?;
+                    let value = if set.generate {
+                        let generated = crypto::new_key_hex()?;
+                        println!("generated key — copy it somewhere else too:");
+                        println!("{generated}");
+                        generated
+                    } else {
+                        use std::io::Read;
+                        let mut buffer = String::new();
+                        std::io::stdin().read_to_string(&mut buffer).map_err(|err| {
+                            DayDocError::Io {
+                                path: "stdin".to_string(),
+                                source: err,
+                            }
+                        })?;
+                        buffer.trim().to_string()
+                    };
+                    secret::set(&vault, &name, &value)?;
+                    println!(
+                        "{name} key stored in {}",
+                        vault.state_dir().join("keys").display()
+                    );
+                    Ok(ExitCode::SUCCESS)
+                }
+                KeyAction::Show(show) => {
+                    let name = normalise_key_name(&show.name)?;
+                    if secret::is_set(&vault, &name) {
+                        println!("{name} key: set");
+                    } else {
+                        println!("{name} key: not set");
+                    }
+                    Ok(ExitCode::SUCCESS)
+                }
+                KeyAction::Clear(clear) => {
+                    let name = normalise_key_name(&clear.name)?;
+                    let removed = secret::clear(&vault, &name)?;
+                    println!("{}", if removed { "cleared" } else { "nothing to clear" });
+                    Ok(ExitCode::SUCCESS)
+                }
+            }
         }
 
         Sub::Config(cmd) => {

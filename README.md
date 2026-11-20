@@ -89,7 +89,13 @@ History is never edited.
   domain or a person propose a project folder. Accepting files the members.
 - **Backups with retention.** A dated `.tar.gz` of the vault, last 7 daily,
   4 weekly, 6 monthly. Backups live in the state directory, not inside the
-  vault they protect.
+  vault they protect. `backup_encrypt = true` writes `.tar.gz.enc`
+  (AES-256-GCM) and refuses to write anything at all without a key.
+- **Restore.** `daydoc restore <file> --into <dir>`, decrypting when needed and
+  refusing archive entries that would escape the target directory.
+- **Keys.** `daydoc key set backup --generate` prints a key once and stores it
+  `0600` in the state directory; `DAYDOC_BACKUP_KEY` overrides it. Values are
+  never printed by `key show`.
 - **Identity guard.** Change a note's `id` and the file is a new note: the old
   id stays in the index and a warning lands in `_meta/warnings/`.
 - **`--json` on `decisions`, `search`, `stale`, `status` and `lint`.**
@@ -118,8 +124,10 @@ on, three things hold:
 - `daydoc chat --preview` prints the exact system prompt and note text that would
   leave the machine, and sends nothing.
 
-The key is read from `DAYDOC_LLM_KEY` (never from the config file, never logged);
-the OS keychain is the next step.
+The key comes from `daydoc key set llm` (or `DAYDOC_LLM_KEY`), never from the
+config file and never logged. The OS keychain is the next store behind the same
+trait; until then the key file is `0600` and the threat model is written down in
+`src/secret.rs`.
 
 ## Guarantees
 
@@ -158,7 +166,9 @@ sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 reindex     rebuild the search index from the vault
 watch       reindex on external edits, commit on a timer
-backup      write a dated .tar.gz and apply 7/4/6 retention
+backup      write a dated .tar.gz (optionally encrypted) and apply retention
+restore     unpack a backup into a folder
+key         store, show or clear a key (values never printed)
 check       identity check plus trash purge
 import      import an existing Markdown folder (dry-run preview)
 cluster     propose project folders from notes that cluster
@@ -196,6 +206,8 @@ and self-update. See `docs/ROADMAP.md`.
 ```
 src/
   llm.rs          optional BYOK chat: retrieval, preview, provider requests
+  secret.rs       key storage: environment, 0600 file, keychain-ready trait
+  crypto.rs       AES-256-GCM for encrypted backups
   watch.rs        filesystem watcher, debounce, reindex and timed commit
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks
