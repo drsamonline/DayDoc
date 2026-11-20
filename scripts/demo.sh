@@ -33,9 +33,11 @@ NOTE
 "$DAYDOC" meeting "$VAULT/meetings/kickoff.md" --approve 1 --actions
 
 echo "--- supersede, then revert"
+# DR-0002 came from the meeting approval, so the supersession takes DR-0003.
 "$DAYDOC" supersede DR-0001 "Use Entra ID for SSO" --decision "Entra is cheaper at our volume."
 "$DAYDOC" decisions
-"$DAYDOC" revert DR-0002 --reason "wrong call, Okta stays"
+"$DAYDOC" revert DR-0003 --reason "wrong call, Okta stays"
+"$DAYDOC" decisions
 
 echo "--- ask"
 "$DAYDOC" ask "what did we decide about okta"

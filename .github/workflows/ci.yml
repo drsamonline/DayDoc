@@ -38,7 +38,26 @@ jobs:
       - name: test the core alone
         run: cargo test --no-default-features --lib
         if: matrix.os == 'ubuntu-latest'
+      - name: demo script
+        run: |
+          export DAYDOC=./target/debug/daydoc
+          bash scripts/demo.sh /tmp/daydoc-demo
+        if: matrix.os == 'ubuntu-latest'
       - name: test
         run: cargo test --all-targets
       - name: release build
         run: cargo build --release
+
+  packaging:
+    name: debian package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-deb
+        run: cargo install cargo-deb --locked
+      - name: build the .deb
+        run: cargo deb
+      - name: show what was built
+        run: ls -l target/debian/*.deb
