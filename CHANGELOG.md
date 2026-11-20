@@ -31,6 +31,8 @@ second audit pass.
 
 ### Fixed
 
+- Indexing and embedding wrote one autocommit per statement, which was a thousand
+  fsyncs for a thousand notes; both now run in a single transaction.
 - `calendar` sliced a date by byte index, so an `.ics` with non-ASCII in it
   panicked the parser. It now takes characters and skips anything that is not
   eight ASCII digits.

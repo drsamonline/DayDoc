@@ -47,8 +47,10 @@ fn five_hundred_notes_index_and_search_within_budget() {
     let report = daydoc::index::reindex(&vault).expect("reindex");
     let index_time = started.elapsed();
     assert_eq!(report.indexed, notes);
+    // The index writes in one transaction; without that, a Windows runner took
+    // over five seconds for this many notes.
     assert!(
-        index_time.as_secs_f64() < 5.0,
+        index_time.as_secs_f64() < 3.0,
         "indexing {notes} notes took {index_time:?}"
     );
 

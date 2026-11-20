@@ -116,26 +116,34 @@ fn upsert_with(conn: &Connection, note: &Note) -> Result<()> {
 
 /// Rebuild the whole index from the vault.
 pub fn reindex(vault: &Vault) -> Result<ReindexReport> {
-    let conn = vault.db()?;
+    let mut conn = vault.db()?;
     conn.execute_batch(SCHEMA)?;
     conn.execute_batch(FTS_SCHEMA)?;
-    conn.execute("DELETE FROM note_meta", [])
-        .map_err(DayDocError::Db)?;
-    conn.execute("DELETE FROM note_fts", [])
-        .map_err(DayDocError::Db)?;
 
     let scan = vault.scan()?;
+    let files = vault.list_rels()?.len() as i64;
     let mut report = ReindexReport {
         broken: scan.broken.len(),
         ..Default::default()
     };
-    for note in &scan.notes {
-        upsert_with(&conn, note)?;
-        report.indexed += 1;
+
+    // One transaction: without it every statement autocommits, which is a
+    // thousand fsyncs for a thousand notes.
+    {
+        let tx = conn.transaction().map_err(DayDocError::Db)?;
+        tx.execute("DELETE FROM note_meta", [])
+            .map_err(DayDocError::Db)?;
+        tx.execute("DELETE FROM note_fts", []).map_err(DayDocError::Db)?;
+        for note in &scan.notes {
+            upsert_with(&tx, note)?;
+            report.indexed += 1;
+        }
+        // Files, not notes: a file with broken frontmatter is still on disk, and
+        // the index must notice when one appears.
+        set_file_count(&tx, files)?;
+        tx.commit().map_err(DayDocError::Db)?;
     }
-    // Files, not notes: a file with broken frontmatter is still on disk, and the
-    // index must notice when one appears.
-    set_file_count(&conn, vault.list_rels()?.len() as i64)?;
+
     report.identities_changed = check_identity(vault)?.len();
     vault.audit(
         "reindex",

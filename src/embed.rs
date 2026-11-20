@@ -11,7 +11,7 @@
 //! vocabulary, which is what the index already does, so auto-linking is
 //! deliberately *not* enabled on it by default (see `link.rs`).
 
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
 use crate::error::{DayDocError, Result};
 use crate::vault::Vault;
@@ -124,10 +124,7 @@ fn from_blob(blob: &[u8]) -> Vec<f32> {
         .collect()
 }
 
-/// Store one note's vector, replacing any earlier one.
-pub fn store(vault: &Vault, rel_path: &str, vector: &[f32]) -> Result<()> {
-    let conn = vault.db()?;
-    conn.execute_batch(SCHEMA)?;
+fn store_with(conn: &Connection, rel_path: &str, vector: &[f32]) -> Result<()> {
     conn.execute(
         "INSERT INTO note_vectors (rel_path, dims, vec) VALUES (?1, ?2, ?3)
          ON CONFLICT(rel_path) DO UPDATE SET dims = excluded.dims, vec = excluded.vec",
@@ -135,6 +132,13 @@ pub fn store(vault: &Vault, rel_path: &str, vector: &[f32]) -> Result<()> {
     )
     .map_err(DayDocError::Db)?;
     Ok(())
+}
+
+/// Store one note's vector, replacing any earlier one.
+pub fn store(vault: &Vault, rel_path: &str, vector: &[f32]) -> Result<()> {
+    let conn = vault.db()?;
+    conn.execute_batch(SCHEMA)?;
+    store_with(&conn, rel_path, vector)
 }
 
 /// Every stored vector.
@@ -161,17 +165,20 @@ pub fn all(vault: &Vault) -> Result<Vec<(String, Vec<f32>)>> {
 /// Embed every note in the vault and store the vectors.
 pub fn rebuild<E: Embedder>(vault: &Vault, embedder: &E) -> Result<usize> {
     let notes = vault.scan()?.notes;
-    let conn = vault.db()?;
+    let mut conn = vault.db()?;
     conn.execute_batch(SCHEMA)?;
-    conn.execute("DELETE FROM note_vectors", [])
-        .map_err(DayDocError::Db)?;
-    drop(conn);
 
     let mut count = 0usize;
-    for note in &notes {
-        let vector = embedder.embed(&note.search_text());
-        store(vault, &note.rel_path, &vector)?;
-        count += 1;
+    {
+        let tx = conn.transaction().map_err(DayDocError::Db)?;
+        tx.execute("DELETE FROM note_vectors", [])
+            .map_err(DayDocError::Db)?;
+        for note in &notes {
+            let vector = embedder.embed(&note.search_text());
+            store_with(&tx, &note.rel_path, &vector)?;
+            count += 1;
+        }
+        tx.commit().map_err(DayDocError::Db)?;
     }
     Ok(count)
 }
