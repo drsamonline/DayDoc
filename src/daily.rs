@@ -21,10 +21,18 @@ pub fn wrap_due(now: chrono::DateTime<chrono::Local>, already_written: bool) -> 
 }
 
 /// Has today's wrap been written into the daily note?
+///
+/// The wrap itself contains `##` sub-headings, so this reads the raw file rather
+/// than asking for the `## End of day` section — that section is empty by
+/// construction.
 pub fn wrap_written(vault: &Vault, date: &str) -> bool {
-    match vault.load(&daily_rel(date)) {
-        Ok(note) => note.section("end of day").trim().len() > 20,
-        Err(_) => false,
+    let raw = match vault.read(&daily_rel(date)) {
+        Ok(raw) => raw,
+        Err(_) => return false,
+    };
+    match raw.split_once("## End of day") {
+        Some((_, rest)) => rest.trim().len() > 20,
+        None => false,
     }
 }
 
