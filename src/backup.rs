@@ -257,8 +257,14 @@ pub struct RestoreReport {
 }
 
 /// Unpack a backup. Entry paths that would escape `dest` are skipped, not
-/// followed.
-pub fn restore(file: &Path, dest: &Path, key: Option<&str>) -> Result<RestoreReport> {
+/// followed, and a destination that already holds files is refused unless
+/// `force` is set — a restore over a live vault would overwrite newer notes.
+pub fn restore(
+    file: &Path,
+    dest: &Path,
+    key: Option<&str>,
+    force: bool,
+) -> Result<RestoreReport> {
     let payload = std::fs::read(file).map_err(|e| DayDocError::io(file, e))?;
     let (data, encrypted) = if crypto::is_encrypted(&payload) {
         let text = key.ok_or_else(|| {
@@ -274,6 +280,17 @@ pub fn restore(file: &Path, dest: &Path, key: Option<&str>) -> Result<RestoreRep
         (payload, false)
     };
 
+    if !force && dest.is_dir() {
+        let occupied = std::fs::read_dir(dest)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+        if occupied {
+            return Err(DayDocError::Config(format!(
+                "{} is not empty; pass --force to unpack into it anyway",
+                dest.display()
+            )));
+        }
+    }
     std::fs::create_dir_all(dest).map_err(|e| DayDocError::io(dest, e))?;
     let decoder = GzDecoder::new(&data[..]);
     let mut archive = Archive::new(decoder);
@@ -392,7 +409,7 @@ mod tests {
         assert!(!String::from_utf8_lossy(&payload).contains("title: A"));
 
         let dest = vault.state_dir().join("restored");
-        let restored = restore(&report.path, &dest, Some(&key)).expect("restore");
+        let restored = restore(&report.path, &dest, Some(&key), false).expect("restore");
         assert!(restored.encrypted);
         assert!(restored.files >= 2);
         let text = std::fs::read_to_string(dest.join("inbox/a.md")).expect("restored note");
@@ -409,9 +426,35 @@ mod tests {
         let dir = vault.state_dir().join("backups");
         let report = run(&vault, &dir).expect("backup");
         let dest = vault.state_dir().join("restored");
-        let err = restore(&report.path, &dest, None).expect_err("no key");
+        let err = restore(&report.path, &dest, None, false).expect_err("no key");
         assert!(err.to_string().contains("encrypted"));
         assert!(!dest.join("inbox").exists());
+    }
+
+    #[test]
+    fn restore_refuses_a_folder_that_already_has_files() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/c.md", "---\nid: 01C\ntype: idea\ntitle: C\n---\nbody\n")
+            .expect("write");
+        let dir = vault.state_dir().join("backups");
+        let report = run(&vault, &dir).expect("backup");
+
+        let dest = vault.state_dir().join("occupied");
+        std::fs::create_dir_all(&dest).expect("dir");
+        std::fs::write(dest.join("newer-note.md"), "mine").expect("write");
+
+        let err = restore(&report.path, &dest, None, false).expect_err("refused");
+        assert!(err.to_string().contains("--force"), "{err}");
+        assert_eq!(
+            std::fs::read_to_string(dest.join("newer-note.md")).expect("read"),
+            "mine",
+            "the refusal must not touch the folder"
+        );
+
+        // With --force the same folder is used.
+        let restored = restore(&report.path, &dest, None, true).expect("forced");
+        assert!(restored.files >= 1);
     }
 
     #[test]
@@ -424,7 +467,7 @@ mod tests {
         let report = run(&vault, &dir).expect("backup");
         assert!(!report.encrypted);
         let dest = vault.state_dir().join("restored");
-        let restored = restore(&report.path, &dest, None).expect("restore");
+        let restored = restore(&report.path, &dest, None, false).expect("restore");
         assert!(!restored.encrypted);
         assert!(dest.join("inbox/b.md").exists());
     }

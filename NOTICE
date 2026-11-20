@@ -1,0 +1,28 @@
+DayDoc — third-party notices
+============================
+
+DayDoc itself is MIT licensed; see LICENSE.
+
+Bundled fonts
+-------------
+
+Lohit Devanagari, Lohit Gujarati, Lohit Bengali, Lohit Assamese, Lohit Gurmukhi,
+Lohit Odia, Lohit Tamil, Lohit Telugu, Lohit Kannada, Lohit Malayalam
+— SIL Open Font License 1.1
+Copyright 2006, Modular Infotech Pvt Ltd.
+Copyright 2009, Red Hat, Inc.
+Source: https://pagure.io/lohit/
+Modifications: none. The files in assets/fonts/ are unmodified copies.
+Licence text: assets/fonts/OFL.txt
+
+Rust dependencies
+-----------------
+
+Every other third-party component is a Rust crate declared in Cargo.toml and
+pinned in Cargo.lock. Their licences are recorded in the lockfile's package
+metadata and can be listed with:
+
+    cargo install cargo-license
+    cargo license
+
+No dependency is vendored into this repository.

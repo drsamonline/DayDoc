@@ -189,10 +189,15 @@ replay      replay staged writes after a crash
 status      vault counts and open threads
 ```
 
-## Licence
+## Licence and legal
 
-Not chosen yet. Add a `LICENSE` file and the matching `license` field in
-`Cargo.toml` before publishing binaries.
+MIT — see `LICENSE`. Bundled fonts and their terms are in `NOTICE`; how DayDoc
+handles your data is in `PRIVACY.md`; what it does and does not protect is in
+`SECURITY.md`.
+
+These are drafts written to be checkable against the code, not legal advice. If
+you fork this for commercial use, have your own counsel review the privacy and
+security statements before you ship.
 
 ## The window
 

@@ -335,6 +335,9 @@ struct RestoreCmd {
     #[argh(option)]
     /// where to unpack it (default: the state directory)
     into: Option<String>,
+    #[argh(switch)]
+    /// unpack into a folder that already has files
+    force: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -1063,7 +1066,7 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| vault.state_dir().join("restore"));
             let key = secret::resolve(&vault, secret::BACKUP);
-            let report = backup::restore(&file, &dest, key.as_deref())?;
+            let report = backup::restore(&file, &dest, key.as_deref(), cmd.force)?;
             println!(
                 "restored {} file(s) into {}{}",
                 report.files,

@@ -58,8 +58,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 
 ## Before 1.0
 
-See `docs/AUDIT.md`: a licence, a `SECURITY.md`, a `--force` guard on `restore`,
-and one human pass over the window.
+See `docs/AUDIT.md`. Licence, `SECURITY.md` and the `restore --force` guard are
+done; what remains is one human pass over the window.
 
 ## Explicitly out of scope
 
