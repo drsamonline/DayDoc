@@ -160,6 +160,46 @@ pub fn ensure(vault: &Vault) -> Result<Option<ReindexReport>> {
     Ok(Some(reindex(vault)?))
 }
 
+/// Index a single path after a change, or drop it if the file is gone.
+///
+/// Returns whether the path is now in the index. A note that cannot be parsed is
+/// not an error here: it is reported by `lint`, and the next full `reindex`
+/// settles the count.
+pub fn upsert_path(vault: &Vault, rel: &str) -> Result<bool> {
+    if !vault.exists(rel) {
+        remove(vault, rel)?;
+        return Ok(false);
+    }
+    let note = match vault.load(rel) {
+        Ok(note) => note,
+        Err(_) => {
+            remove(vault, rel)?;
+            return Ok(false);
+        }
+    };
+    upsert(vault, &note)?;
+    Ok(true)
+}
+
+/// Drop a path from the index.
+pub fn remove(vault: &Vault, rel: &str) -> Result<()> {
+    let conn = vault.db()?;
+    conn.execute_batch(FTS_SCHEMA)?;
+    conn.execute("DELETE FROM note_meta WHERE rel_path = ?1", params![rel])
+        .map_err(DayDocError::Db)?;
+    conn.execute("DELETE FROM note_fts WHERE rel_path = ?1", params![rel])
+        .map_err(DayDocError::Db)?;
+    Ok(())
+}
+
+/// Record the current file count, so `ensure` and `candidates` know whether the
+/// index still describes the vault.
+pub fn stamp(vault: &Vault) -> Result<()> {
+    let conn = vault.db()?;
+    conn.execute_batch(FTS_SCHEMA)?;
+    set_file_count(&conn, vault.list_rels()?.len() as i64)
+}
+
 /// Index one note after it changes. A missing index is not an error: the next
 /// `reindex` rebuilds it.
 pub fn upsert(vault: &Vault, note: &Note) -> Result<()> {
@@ -317,6 +357,31 @@ mod tests {
         // A typo is a miss for the index; search falls back to a scan for it.
         let typo = candidates(&vault, &["razorpy".to_string()]).expect("indexed");
         assert!(typo.is_empty());
+    }
+
+    #[test]
+    fn a_single_path_can_be_indexed_and_dropped_without_a_full_rebuild() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/a.md", "---\nid: 01A\ntype: idea\ntitle: Razorpay\n---\nbody\n")
+            .expect("a");
+        reindex(&vault).expect("reindex");
+
+        vault
+            .write("inbox/b.md", "---\nid: 01B\ntype: idea\ntitle: Okta\n---\nbody\n")
+            .expect("b");
+        assert!(upsert_path(&vault, "inbox/b.md").expect("upsert"));
+        stamp(&vault).expect("stamp");
+        // The stamp now agrees with the vault, so nothing asks for a rebuild.
+        assert!(ensure(&vault).expect("ensure").is_none());
+        let hits = candidates(&vault, &["okta".to_string()]).expect("indexed");
+        assert_eq!(hits, vec!["inbox/b.md".to_string()]);
+
+        std::fs::remove_file(vault.abs("inbox/b.md").expect("abs")).expect("delete");
+        assert!(!upsert_path(&vault, "inbox/b.md").expect("drop"));
+        stamp(&vault).expect("stamp");
+        assert!(candidates(&vault, &["okta".to_string()]).expect("indexed").is_empty());
+        assert!(ensure(&vault).expect("ensure").is_none());
     }
 
     #[test]

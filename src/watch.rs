@@ -126,13 +126,26 @@ pub fn drain_batch(
     Ok(seen.into_iter().collect())
 }
 
-/// Reindex and, when asked, commit. A failed commit does not stop the watcher:
-/// the vault is already on disk.
+/// Index the batch's paths and, when asked, commit. A failed commit does not
+/// stop the watcher: the vault is already on disk.
+///
+/// Only the changed paths are touched. A full rebuild per editor save would make
+/// the watcher cost grow with the vault rather than with the edit.
 pub fn handle_batch(vault: &Vault, changed: &[String], commit_now: bool) -> Result<BatchOutcome> {
-    let report = crate::index::reindex(vault)?;
+    let mut indexed = 0usize;
+    for rel in changed {
+        if !is_interesting(rel) {
+            continue;
+        }
+        if crate::index::upsert_path(vault, rel)? {
+            indexed += 1;
+        }
+    }
+    crate::index::stamp(vault)?;
+
     let mut outcome = BatchOutcome {
         changed: changed.to_vec(),
-        reindexed: report.indexed,
+        reindexed: indexed,
         committed: false,
         commit_head: None,
     };
@@ -221,6 +234,22 @@ mod tests {
         let outcome = handle_batch(&vault, &["inbox/a.md".to_string()], false).expect("handle");
         assert_eq!(outcome.reindexed, 1);
         assert!(!outcome.committed);
+    }
+
+    #[test]
+    fn a_deleted_note_leaves_the_index() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/a.md", "---\nid: 01A\ntype: idea\ntitle: Gone soon\n---\nbody\n")
+            .expect("write");
+        handle_batch(&vault, &["inbox/a.md".to_string()], false).expect("index it");
+        assert!(crate::index::candidates(&vault, &["gone".to_string()]).is_some());
+
+        std::fs::remove_file(vault.abs("inbox/a.md").expect("abs")).expect("delete");
+        let outcome = handle_batch(&vault, &["inbox/a.md".to_string()], false).expect("handle");
+        assert_eq!(outcome.reindexed, 0);
+        let hits = crate::index::candidates(&vault, &["gone".to_string()]).expect("indexed");
+        assert!(hits.is_empty(), "a deleted note is still in the index");
     }
 
     #[test]

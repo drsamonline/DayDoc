@@ -597,3 +597,14 @@ fn the_json_surface_is_complete() {
     let out = sandbox.ok(&["cluster", "--json"]);
     serde_json::from_str::<serde_json::Value>(&out).expect("cluster json");
 }
+
+#[test]
+fn capture_preview_honours_a_forced_kind() {
+    let sandbox = Sandbox::new("preview-kind");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let out = sandbox.ok(&["capture", "hmm", "--preview", "--kind", "task"]);
+    assert_contains(&out, "would store as task");
+    assert_contains(&out, "classifier guessed");
+    // Nothing was written.
+    assert!(!sandbox.exists("tasks"));
+}

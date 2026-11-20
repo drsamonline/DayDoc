@@ -95,10 +95,15 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
         let entry = entry.map_err(|e| DayDocError::io(dir, e))?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        let meta = match entry.metadata() {
+        // `symlink_metadata`, not `metadata`: a link inside the source folder must
+        // not pull a file from outside it into the vault.
+        let meta = match std::fs::symlink_metadata(&path) {
             Ok(m) => m,
             Err(_) => continue,
         };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
         if meta.is_dir() {
             if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
                 continue;
@@ -289,6 +294,21 @@ mod tests {
 
         // The source folder is untouched.
         assert!(source.join("notes/plain.md").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_in_the_source_are_not_followed() {
+        let vault = temp_vault();
+        let outside = std::env::temp_dir().join(format!("daydoc-outside-{}.md", ids::new_ulid()));
+        std::fs::write(&outside, "a secret outside the folder\n").expect("write outside");
+        let source = std::env::temp_dir().join(format!("daydoc-symlink-{}", ids::new_ulid()));
+        std::fs::create_dir_all(&source).expect("dirs");
+        std::os::unix::fs::symlink(&outside, source.join("link.md")).expect("symlink");
+
+        let report = run(&vault, &source).expect("import");
+        assert!(report.entries.is_empty(), "followed a symlink: {report:?}");
+        assert!(!vault.exists("link.md"));
     }
 
     #[test]

@@ -715,13 +715,27 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             };
             let text = read_text(&raw)?;
             if cmd.preview {
-                let classification = capture::preview(&text);
-                println!(
-                    "would route as {} at {:.0}% (confident: {})",
-                    classification.note_type,
-                    classification.confidence * 100.0,
-                    classification.is_confident(vault.config().min_classification_confidence)
-                );
+                match cmd.kind.as_deref() {
+                    Some(kind) => {
+                        let forced = parse_kind(kind)?;
+                        let classification = capture::preview(&text);
+                        println!(
+                            "would store as {forced} (--kind), classifier guessed {} at {:.0}%",
+                            classification.note_type,
+                            classification.confidence * 100.0
+                        );
+                    }
+                    None => {
+                        let classification = capture::preview(&text);
+                        println!(
+                            "would route as {} at {:.0}% (confident: {})",
+                            classification.note_type,
+                            classification.confidence * 100.0,
+                            classification
+                                .is_confident(vault.config().min_classification_confidence)
+                        );
+                    }
+                }
                 return Ok(ExitCode::SUCCESS);
             }
             let outcome = match cmd.kind.as_deref() {
