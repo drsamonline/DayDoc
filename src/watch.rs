@@ -241,15 +241,32 @@ mod tests {
         let vault = temp_vault();
         vault
             .write("inbox/a.md", "---\nid: 01A\ntype: idea\ntitle: Gone soon\n---\nbody\n")
-            .expect("write");
-        handle_batch(&vault, &["inbox/a.md".to_string()], false).expect("index it");
-        assert!(crate::index::candidates(&vault, &["gone".to_string()]).is_some());
+            .expect("a");
+        vault
+            .write("inbox/b.md", "---\nid: 01B\ntype: idea\ntitle: Stays put\n---\nbody\n")
+            .expect("b");
+        handle_batch(
+            &vault,
+            &["inbox/a.md".to_string(), "inbox/b.md".to_string()],
+            false,
+        )
+        .expect("index both");
+        assert_eq!(
+            crate::index::candidates(&vault, &["stays".to_string()]).expect("indexed"),
+            vec!["inbox/b.md".to_string()]
+        );
 
         std::fs::remove_file(vault.abs("inbox/a.md").expect("abs")).expect("delete");
         let outcome = handle_batch(&vault, &["inbox/a.md".to_string()], false).expect("handle");
         assert_eq!(outcome.reindexed, 0);
+
+        // One note is left, so the index is trusted and the deletion must show.
         let hits = crate::index::candidates(&vault, &["gone".to_string()]).expect("indexed");
         assert!(hits.is_empty(), "a deleted note is still in the index");
+        assert_eq!(
+            crate::index::candidates(&vault, &["stays".to_string()]).expect("indexed"),
+            vec!["inbox/b.md".to_string()]
+        );
     }
 
     #[test]
