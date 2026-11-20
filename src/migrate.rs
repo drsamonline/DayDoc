@@ -89,7 +89,7 @@ impl ImportReport {
     }
 }
 
-fn collect(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     let entries = std::fs::read_dir(dir).map_err(|e| DayDocError::io(dir, e))?;
     for entry in entries {
         let entry = entry.map_err(|e| DayDocError::io(dir, e))?;
@@ -108,7 +108,7 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
             if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
                 continue;
             }
-            collect(root, &path, out)?;
+            collect(&path, out)?;
         } else if meta.is_file() && name.ends_with(".md") && !name.starts_with('.') {
             out.push(path);
         }
@@ -166,7 +166,7 @@ fn scan(vault: &Vault, source: &Path, write: bool) -> Result<ImportReport> {
         )));
     }
     let mut files: Vec<PathBuf> = Vec::new();
-    collect(source, source, &mut files)?;
+    collect(source, &mut files)?;
     files.sort();
 
     let mut report = ImportReport::default();

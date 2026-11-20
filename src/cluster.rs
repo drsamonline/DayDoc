@@ -211,7 +211,7 @@ pub fn propose(vault: &Vault) -> Result<Vec<ClusterProposal>> {
         });
     }
 
-    proposals.sort_by(|a, b| b.notes.len().cmp(&a.notes.len()));
+    proposals.sort_by_key(|proposal| std::cmp::Reverse(proposal.notes.len()));
     Ok(proposals)
 }
 

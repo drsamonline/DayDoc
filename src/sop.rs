@@ -207,7 +207,7 @@ pub fn propose(vault: &Vault) -> Result<Vec<SopProposal>> {
             support: members.len(),
         });
     }
-    proposals.sort_by(|a, b| b.support.cmp(&a.support));
+    proposals.sort_by_key(|proposal| std::cmp::Reverse(proposal.support));
     Ok(proposals)
 }
 

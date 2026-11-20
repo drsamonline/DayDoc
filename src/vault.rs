@@ -83,14 +83,17 @@ impl Vault {
             let path = root.join(dir);
             fs::create_dir_all(&path).map_err(|e| DayDocError::io(&path, e))?;
         }
-        let mut config = Config::default();
-        config.vault_root = root.display().to_string();
         let cfg_path = root.join(crate::config::CONFIG_FILE);
-        if !cfg_path.exists() {
-            config.write_to(root)?;
+        let config = if !cfg_path.exists() {
+            let fresh = Config {
+                vault_root: root.display().to_string(),
+                ..Config::default()
+            };
+            fresh.write_to(root)?;
+            fresh
         } else {
-            config = Config::load_from_vault(root)?;
-        }
+            Config::load_from_vault(root)?
+        };
         Ok(Vault {
             root: root.to_path_buf(),
             state: default_state_dir(),

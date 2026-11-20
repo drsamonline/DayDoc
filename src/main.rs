@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use argh::FromArgs;
 
+use daydoc::embed::Embedder;
 use daydoc::error::DayDocError;
 #[cfg(feature = "git")]
 use daydoc::sync;

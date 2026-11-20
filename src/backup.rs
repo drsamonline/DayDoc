@@ -6,7 +6,6 @@
 //! inside the vault being backed up.
 
 use std::collections::BTreeMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use chrono::{Datelike, Duration, NaiveDate};
@@ -125,7 +124,7 @@ pub fn keep_flags(dates: &[NaiveDate], today: NaiveDate) -> Vec<bool> {
         }
     }
     let mut weekly: Vec<((i32, u32), usize)> = weeks.into_iter().map(|(k, (i, _))| (k, i)).collect();
-    weekly.sort_by(|a, b| b.0.cmp(&a.0));
+    weekly.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     for (_, index) in weekly.into_iter().take(WEEKLY_KEEP) {
         flags[index] = true;
     }
@@ -145,7 +144,7 @@ pub fn keep_flags(dates: &[NaiveDate], today: NaiveDate) -> Vec<bool> {
         }
     }
     let mut monthly: Vec<((i32, u32), usize)> = months.into_iter().map(|(k, (i, _))| (k, i)).collect();
-    monthly.sort_by(|a, b| b.0.cmp(&a.0));
+    monthly.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     for (_, index) in monthly.into_iter().take(MONTHLY_KEEP) {
         flags[index] = true;
     }
@@ -166,7 +165,7 @@ pub fn existing(out_dir: &Path) -> Vec<(PathBuf, NaiveDate)> {
             found.push((entry.path(), date));
         }
     }
-    found.sort_by(|a, b| a.1.cmp(&b.1));
+    found.sort_by_key(|entry| entry.1);
     found
 }
 

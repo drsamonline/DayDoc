@@ -8,7 +8,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::note::Note;
 use crate::stale;
-use crate::types::NoteType;
 use crate::vault::Vault;
 
 #[derive(Debug, Clone, Serialize)]

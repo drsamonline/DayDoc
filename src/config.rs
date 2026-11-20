@@ -100,8 +100,10 @@ impl Config {
     pub fn load_from_vault(root: &Path) -> Result<Config> {
         let path = root.join(CONFIG_FILE);
         if !path.exists() {
-            let mut cfg = Config::default();
-            cfg.vault_root = root.display().to_string();
+            let cfg = Config {
+                vault_root: root.display().to_string(),
+                ..Config::default()
+            };
             return Ok(cfg);
         }
         let raw = std::fs::read_to_string(&path).map_err(|e| DayDocError::io(&path, e))?;
@@ -155,7 +157,7 @@ impl Config {
                     .to_string(),
             ));
         }
-        if self.backup_encrypt && self.backup_enabled == false {
+        if self.backup_encrypt && !self.backup_enabled {
             return Err(DayDocError::Config(
                 "backup_encrypt requires backup_enabled".to_string(),
             ));

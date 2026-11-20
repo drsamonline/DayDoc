@@ -107,7 +107,7 @@ fn install_fonts(ctx: &egui::Context) {
 }
 
 /// The two capture shortcuts: one to write, one to look something up.
-pub fn hotkeys() -> [(HotKey, View); 2] {
+fn hotkeys() -> [(HotKey, View); 2] {
     [
         (
             HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space),
