@@ -294,13 +294,10 @@ mod tests {
     #[test]
     fn setting_a_key_reports_where_it_landed() {
         let vault = temp_vault();
-        let location = set(&vault, BACKUP, "abc123").expect("set");
-        assert!(matches!(
-            location,
-            KeyLocation::Keychain | KeyLocation::File
-        ));
+        let placed = set(&vault, BACKUP, "abc123").expect("set");
+        assert!(matches!(placed, KeyLocation::Keychain | KeyLocation::File));
         assert_eq!(resolve(&vault, BACKUP).as_deref(), Some("abc123"));
-        assert!(location(&vault, BACKUP).is_some());
+        assert!(super::location(&vault, BACKUP).is_some());
         assert!(clear(&vault, BACKUP).expect("clear"));
         assert!(resolve(&vault, BACKUP).is_none());
     }
