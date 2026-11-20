@@ -620,7 +620,7 @@ fn a_meeting_note_inside_the_vault_can_be_given_as_an_absolute_path() {
     std::fs::create_dir_all(sandbox.vault().join("meetings")).expect("dir");
     std::fs::write(
         &note,
-        "---\ntype: meeting\ntitle: Kickoff\n---\nBob: we decided to move billing to Razorpay.\n- [ ] Priya will prepare the checklist\n",
+        "---\ntype: meeting\ntitle: Kickoff\n---\nBob: we decided to move billing to Razorpay.\naction: Priya will prepare the checklist\n",
     )
     .expect("write note");
 
@@ -638,9 +638,9 @@ fn a_meeting_note_inside_the_vault_can_be_given_as_an_absolute_path() {
     let decision = sandbox.read("decisions/DR-0001.md");
     assert_contains(&decision, "source: meetings/kickoff.md");
 
-    // And the action item landed in the note.
+    // And the action item landed in the note as a checkbox.
     let updated = std::fs::read_to_string(&note).expect("read note");
-    assert_contains(&updated, "prepare the checklist");
+    assert_contains(&updated, "- [ ] Priya will prepare the checklist");
 }
 
 #[test]
