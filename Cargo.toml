@@ -18,7 +18,7 @@ path = "src/main.rs"
 [features]
 default = ["git", "ui", "keychain"]
 git = ["dep:git2"]
-ui = ["dep:eframe"]
+ui = ["dep:eframe", "dep:global-hotkey"]
 keychain = ["dep:keyring"]
 
 [dependencies]
@@ -27,6 +27,7 @@ argh = "0.1"
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 eframe = { version = "0.29", optional = true }
+global-hotkey = { version = "0.10", optional = true }
 keyring = { version = "3", default-features = false, features = ["linux-native", "windows-native"], optional = true }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 git2 = { version = "0.20", default-features = false, optional = true }

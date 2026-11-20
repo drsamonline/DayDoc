@@ -5,6 +5,8 @@
 //! cannot corrupt a note.
 
 use eframe::egui;
+use global_hotkey::hotkey::{Code, HotKey, Modifiers};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
 use crate::classify::Classification;
 use crate::error::Result;
@@ -43,7 +45,45 @@ impl View {
     }
 }
 
+/// Fonts bundled with the shell: Latin from egui, Devanagari and Gujarati from
+/// the Lohit project (SIL OFL 1.1, see `assets/fonts/OFL.txt`).
+const DEVANAGARI: &[u8] = include_bytes!("../../assets/fonts/Lohit-Devanagari.ttf");
+const GUJARATI: &[u8] = include_bytes!("../../assets/fonts/Lohit-Gujarati.ttf");
+
+fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "lohit-devanagari".to_string(),
+        egui::FontData::from_static(DEVANAGARI),
+    );
+    fonts.font_data.insert(
+        "lohit-gujarati".to_string(),
+        egui::FontData::from_static(GUJARATI),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        let entry = fonts.families.entry(family).or_default();
+        entry.push("lohit-devanagari".to_string());
+        entry.push("lohit-gujarati".to_string());
+    }
+    ctx.set_fonts(fonts);
+}
+
+/// The two capture shortcuts: one to write, one to look something up.
+pub fn hotkeys() -> [(HotKey, View); 2] {
+    [
+        (
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space),
+            View::Capture,
+        ),
+        (
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK),
+            View::Search,
+        ),
+    ]
+}
+
 pub struct App {
+    hotkey_manager: Option<GlobalHotKeyManager>,
     vault: Vault,
     view: View,
     capture: String,
@@ -68,6 +108,7 @@ impl std::fmt::Debug for App {
 impl App {
     pub fn new(vault: Vault) -> App {
         let mut app = App {
+            hotkey_manager: None,
             vault,
             view: View::Capture,
             capture: String::new(),
@@ -81,6 +122,43 @@ impl App {
         };
         app.refresh();
         app
+    }
+
+    /// Register the global shortcuts. A machine without a hotkey service simply
+    /// runs without them.
+    fn register_hotkeys(&mut self) -> bool {
+        let manager = match GlobalHotKeyManager::new() {
+            Ok(manager) => manager,
+            Err(_) => return false,
+        };
+        let mut registered = false;
+        for (hotkey, _) in hotkeys() {
+            if manager.register(hotkey).is_ok() {
+                registered = true;
+            }
+        }
+        if registered {
+            self.hotkey_manager = Some(manager);
+        }
+        registered
+    }
+
+    fn drain_hotkeys(&mut self, ctx: &egui::Context) {
+        if self.hotkey_manager.is_none() {
+            return;
+        }
+        while let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+            if event.state != HotKeyState::Pressed {
+                continue;
+            }
+            for (hotkey, view) in hotkeys() {
+                if hotkey.id() == event.id {
+                    self.view = view;
+                    self.refresh();
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+            }
+        }
     }
 
     fn refresh(&mut self) {
@@ -344,6 +422,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drain_hotkeys(ctx);
+
         egui::SidePanel::left("daydoc-side")
             .resizable(false)
             .default_width(190.0)
@@ -376,8 +456,11 @@ pub fn run(vault: Vault) -> Result<()> {
             .with_title("DayDoc"),
         ..Default::default()
     };
-    let creator = Box::new(move |_cc: &eframe::CreationContext<'_>| {
-        Ok(Box::new(App::new(vault)) as Box<dyn eframe::App>)
+    let creator = Box::new(move |cc: &eframe::CreationContext<'_>| {
+        install_fonts(&cc.egui_ctx);
+        let mut app = App::new(vault);
+        app.register_hotkeys();
+        Ok(Box::new(app) as Box<dyn eframe::App>)
     });
     eframe::run_native("DayDoc", options, creator)
         .map_err(|err| crate::error::DayDocError::Config(format!("could not open a window: {err}")))
@@ -412,6 +495,24 @@ mod tests {
         assert!(app.capture.is_empty());
         assert!(app.status.contains("DR-0001"), "{}", app.status);
         assert!(app.vault.exists("decisions/DR-0001.md"));
+    }
+
+    #[test]
+    fn the_shortcuts_are_ctrl_shift_space_and_ctrl_shift_k() {
+        let [(space, space_view), (key_k, k_view)] = hotkeys();
+        assert_eq!(space.id(), HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space).id());
+        assert_eq!(key_k.id(), HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK).id());
+        assert_eq!(space_view, View::Capture);
+        assert_eq!(k_view, View::Search);
+    }
+
+    #[test]
+    fn the_indic_fonts_are_bundled() {
+        assert!(DEVANAGARI.len() > 10_000);
+        assert!(GUJARATI.len() > 10_000);
+        // TrueType signature.
+        assert_eq!(&DEVANAGARI[..4], &[0x00, 0x01, 0x00, 0x00]);
+        assert_eq!(&GUJARATI[..4], &[0x00, 0x01, 0x00, 0x00]);
     }
 
     #[test]

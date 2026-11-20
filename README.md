@@ -199,9 +199,14 @@ the ledger as cards, search, stale notes with a re-verify button, and vault
 statistics. It is a view over the same library as the CLI, so nothing exists in
 the window that is not in the vault.
 
-Two limits, stated plainly: the bundled fonts cover Latin script only, so Indic
-text needs a font added before it renders correctly; and the shell has no tray
-icon or global hotkey yet — those need platform code beyond the window itself.
+The window bundles Latin (egui's default) plus Lohit Devanagari and Lohit
+Gujarati (SIL OFL 1.1, `assets/fonts/`), so notes written in those scripts render
+rather than showing boxes. Other Indic scripts need their font added the same way.
+
+Global shortcuts: `Ctrl+Shift+Space` jumps to capture, `Ctrl+Shift+K` to search.
+They are registered when the platform allows it; a machine with no hotkey service
+runs without them, and the window says so in its status line. There is no tray
+icon yet.
 
 ## Packaging
 

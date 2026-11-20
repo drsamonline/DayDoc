@@ -22,6 +22,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
   shapes for OpenAI-compatible, Anthropic and Gemini
 - Desktop shell: capture, decisions, search, stale, status over the library
+- Devanagari and Gujarati fonts bundled (Lohit, SIL OFL 1.1)
+- Global shortcuts: `Ctrl+Shift+Space` capture, `Ctrl+Shift+K` search
 - Watcher: debounced reindex plus timed commit for external edits
 - Structured `--json` for handover, wrap and digest
 - Lint: ids, types, citations, links, attachments
@@ -42,9 +44,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    auto-accepted) and fuzzy SOP step matching ride on it.
 2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
    shell, and write actions behind an Approve card.
-3. **Shell follow-ups.** Tray icon and global hotkeys (`Ctrl+Shift+Space`,
-   `Ctrl+Shift+K`, `Ctrl+Shift+M`), an Indic-capable font bundle, and the
-   capture overlay that floats above other windows.
+3. **Shell follow-ups.** A tray icon, `Ctrl+Shift+M` for the morning plan, more
+   Indic scripts (Bengali, Tamil, Telugu, Kannada, Malayalam, Odia, Punjabi),
+   and the floating capture overlay that sits above other windows.
 3. **Keychain edge cases.** The keychain store exists; what is left is a
    Windows credential-manager test pass and a locked-session error message.
 4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
