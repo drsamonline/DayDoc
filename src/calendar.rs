@@ -107,7 +107,7 @@ fn tokens(text: &str) -> Vec<String> {
         .collect()
 }
 
-fn note_date(note: &Note) -> Option<String> {
+fn note_date(vault: &Vault, note: &Note) -> Option<String> {
     for candidate in [
         note.frontmatter.created.as_deref(),
         note.frontmatter.updated.as_deref(),
@@ -121,7 +121,11 @@ fn note_date(note: &Note) -> Option<String> {
             return Some(candidate[..10].to_string());
         }
     }
-    None
+    // A note written today with no date in its frontmatter is still from today.
+    let path = vault.abs(&note.rel_path).ok()?;
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let datetime: chrono::DateTime<chrono::Local> = chrono::DateTime::from(modified);
+    Some(datetime.format("%Y-%m-%d").to_string())
 }
 
 /// Notes written on an event's day that share a meaningful word with its title.
@@ -141,7 +145,7 @@ pub fn tag_suggestions(vault: &Vault, events: &[Event]) -> Result<Vec<TagSuggest
         }
         let mut matched: Vec<String> = Vec::new();
         for note in &notes {
-            if note_date(note).as_deref() != Some(date.as_str()) {
+            if note_date(vault, note).as_deref() != Some(date.as_str()) {
                 continue;
             }
             let note_tokens = tokens(&format!("{} {}", note.title(), note.body));
