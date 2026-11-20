@@ -24,7 +24,7 @@ pub const ARCHIVE: &str = "_archive";
 pub const ASSETS: &str = "assets";
 
 /// Folders created by `daydoc init`. Everything else is the user's.
-pub const VAULT_DIRS: [&str; 13] = [
+pub const VAULT_DIRS: [&str; 17] = [
     META,
     "_meta/warnings",
     "_meta/broken",
@@ -38,6 +38,10 @@ pub const VAULT_DIRS: [&str; 13] = [
     "meetings",
     "ideas",
     "tasks",
+    "reference",
+    "sops",
+    "projects",
+    "handovers",
 ];
 
 const SKIP_DIRS: [&str; 6] = [META, TRASH, ARCHIVE, ASSETS, "node_modules", "target"];

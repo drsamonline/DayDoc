@@ -674,9 +674,24 @@ fn run_sync(
 fn resolve_source(vault: &Vault, arg: &str) -> String {
     let path = PathBuf::from(arg);
     if path.is_absolute() {
+        // Both sides are canonicalised: on Windows `canonicalize` returns a
+        // verbatim path (`\\?\C:\...`) that will not strip against the plain
+        // vault root.
         if let (Ok(root), Ok(full)) = (vault.root().canonicalize(), path.canonicalize()) {
-            if full.starts_with(&root) {
-                return vault.rel_of(&full);
+            if let Ok(rest) = full.strip_prefix(&root) {
+                let rel = rest
+                    .components()
+                    .filter_map(|component| match component {
+                        std::path::Component::Normal(part) => {
+                            Some(part.to_string_lossy().to_string())
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("/");
+                if !rel.is_empty() {
+                    return rel;
+                }
             }
         }
     }

@@ -43,6 +43,7 @@ echo "--- ask"
 "$DAYDOC" ask "what did we decide about okta"
 
 echo "--- three notes with the same procedure propose an SOP"
+mkdir -p "$VAULT/reference"
 for day in mon tue wed; do
   cat > "$VAULT/reference/rotation-$day.md" <<NOTE
 ---
