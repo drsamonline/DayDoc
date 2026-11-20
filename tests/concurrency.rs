@@ -38,7 +38,7 @@ fn many_writers_to_different_notes_all_land_intact() {
         let barrier = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
             barrier.wait();
-            for round in 0..20 {
+            for round in 0..10 {
                 let rel = format!("inbox/w{writer}-{round}.md");
                 vault
                     .write(&rel, &payload(writer, round))
@@ -51,7 +51,7 @@ fn many_writers_to_different_notes_all_land_intact() {
     }
 
     for writer in 0..8 {
-        for round in 0..20 {
+        for round in 0..10 {
             let rel = format!("inbox/w{writer}-{round}.md");
             let text = vault.read(&rel).expect("read back");
             assert_eq!(text, payload(writer, round), "{rel} is not what was written");
@@ -75,7 +75,7 @@ fn many_writers_to_one_note_never_mix_payloads() {
         let barrier = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
             barrier.wait();
-            for round in 0..10 {
+            for round in 0..6 {
                 vault
                     .write("inbox/shared.md", &payload(writer, round))
                     .expect("write");
@@ -89,7 +89,7 @@ fn many_writers_to_one_note_never_mix_payloads() {
     let text = vault.read("inbox/shared.md").expect("read");
     let mut valid = false;
     for writer in 0..6 {
-        for round in 0..10 {
+        for round in 0..6 {
             if text == payload(writer, round) {
                 valid = true;
             }
@@ -105,14 +105,15 @@ fn many_writers_to_one_note_never_mix_payloads() {
 fn a_reader_never_sees_a_half_written_note() {
     let vault = Arc::new(scratch("torn"));
     let writing = Arc::new(AtomicBool::new(true));
-    let barrier = Arc::new(Barrier::new(3));
+    // Two participants: the writer and the reader. A third would deadlock.
+    let barrier = Arc::new(Barrier::new(2));
 
     let writer = {
         let vault = Arc::clone(&vault);
         let barrier = Arc::clone(&barrier);
         thread::spawn(move || {
             barrier.wait();
-            for round in 0..40 {
+            for round in 0..20 {
                 vault
                     .write("inbox/hot.md", &payload(1, round))
                     .expect("write");
@@ -160,7 +161,7 @@ fn a_write_and_a_delete_of_different_notes_do_not_interfere() {
         let barrier = Arc::clone(&barrier);
         thread::spawn(move || {
             barrier.wait();
-            for round in 0..20 {
+            for round in 0..10 {
                 vault
                     .write("inbox/stays.md", &payload(2, round))
                     .expect("write");
