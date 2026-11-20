@@ -214,6 +214,20 @@ fn push_list(out: &mut String, key: &str, items: &[String]) {
 }
 
 /// Quote a scalar when leaving it bare would change its meaning.
+/// Whether a value would survive as a plain YAML scalar.
+///
+/// Conservative on purpose: anything a YAML reader could reinterpret — a number
+/// in any base, a flow indicator, a comma inside an inline list, a carriage
+/// return — is quoted. A quoted string is always read back as a string.
+fn looks_numeric(raw: &str) -> bool {
+    if raw.parse::<f64>().is_ok() {
+        return true;
+    }
+    let trimmed = raw.trim_start_matches(['+', '-']);
+    let lowered = trimmed.to_ascii_lowercase();
+    lowered.starts_with("0x") || lowered.starts_with("0o") || lowered.starts_with("0b")
+}
+
 fn quote(raw: &str) -> String {
     let needs_quotes = raw.is_empty()
         || raw.trim() != raw
@@ -221,13 +235,12 @@ fn quote(raw: &str) -> String {
         || raw.contains(": ")
         || raw.contains(" #")
         || raw.ends_with(':')
-        || raw.contains('\n')
-        || raw.contains('\t')
+        || raw.contains(['\n', '\t', '\r', ',', '[', ']', '{', '}'])
+        || looks_numeric(raw)
         || matches!(
             raw.to_ascii_lowercase().as_str(),
             "true" | "false" | "yes" | "no" | "null" | "~" | "on" | "off"
-        )
-        || raw.parse::<f64>().is_ok();
+        );
 
     if !needs_quotes {
         return raw.to_string();
@@ -240,6 +253,7 @@ fn quote(raw: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
             other => out.push(other),
         }
     }
