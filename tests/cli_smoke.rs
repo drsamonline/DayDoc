@@ -742,13 +742,18 @@ fn action_commands_emit_json() {
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("accept json");
     assert_eq!(parsed["status"], "accepted");
 
-    let out = sandbox.ok(&["reject", "DR-0001", "--json"]);
+    // An accepted decision cannot be rejected, so reject a fresh proposal.
+    sandbox.ok(&["capture", "--text", "we decided to use entra for sso", "--json"]);
+    let out = sandbox.ok(&["reject", "DR-0002", "--json"]);
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("reject json");
-    assert_eq!(parsed["status"], "accepted", "an accepted decision cannot be rejected");
+    assert_eq!(parsed["status"], "rejected");
+
+    let refused = sandbox.run(&["reject", "DR-0001"]);
+    assert!(!refused.status.success(), "an accepted decision was rejected");
 
     let out = sandbox.ok(&["reindex", "--json"]);
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("reindex json");
-    assert_eq!(parsed["indexed"], 1);
+    assert_eq!(parsed["indexed"], 2);
 
     let out = sandbox.ok(&["check", "--json"]);
     serde_json::from_str::<serde_json::Value>(&out).expect("check json");
