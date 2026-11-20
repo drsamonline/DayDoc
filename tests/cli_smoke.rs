@@ -758,3 +758,49 @@ fn action_commands_emit_json() {
     let out = sandbox.ok(&["check", "--json"]);
     serde_json::from_str::<serde_json::Value>(&out).expect("check json");
 }
+
+#[test]
+fn deleting_the_index_rebuilds_it_instead_of_breaking_search() {
+    let sandbox = Sandbox::new("index-disposable");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "we decided to adopt okta for sso across all products"]);
+    sandbox.ok(&["reindex"]);
+
+    // The index lives in the state directory, not the vault, and is disposable.
+    let index = sandbox.root.join("state/index.db");
+    assert!(index.exists(), "the index was never written");
+    std::fs::remove_file(&index).expect("delete the index");
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(sandbox.root.join(format!("state/index.db{suffix}")));
+    }
+
+    let out = sandbox.ok(&["ask", "what did we decide about okta"]);
+    assert_contains(&out, "DR-0001");
+    assert_contains(&out, "Adopt okta");
+
+    let out = sandbox.ok(&["status", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("status json");
+    assert_eq!(parsed["decisions"], 1);
+    assert!(sandbox.root.join("state/index.db").exists(), "the index did not come back");
+}
+
+#[test]
+fn a_deleted_note_leaves_no_dangling_citation() {
+    let sandbox = Sandbox::new("dangling");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "we decided to adopt okta for sso"]);
+    sandbox.ok(&["capture", "--text", "meeting notes: okta sso confirmed, see DR-0001"]);
+    sandbox.ok(&["reindex"]);
+
+    let out = sandbox.ok(&["decisions"]);
+    assert_contains(&out, "cited by 1 note");
+
+    // Trash the citing note; the count must follow, not stay stale.
+    let citing = sandbox.ok(&["search", "okta sso confirmed", "--json"]);
+    let hits: serde_json::Value = serde_json::from_str(&citing).expect("search json");
+    let path = hits[0]["rel_path"].as_str().expect("a path").to_string();
+    sandbox.ok(&["archive", &path]);
+
+    let out = sandbox.ok(&["decisions"]);
+    assert_contains(&out, "cited by 0 note");
+}

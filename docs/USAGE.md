@@ -105,3 +105,6 @@ daydoc ui         # or the window: Ctrl+Shift+Space to capture, Ctrl+Shift+K to 
 
 The vault is plain files. VS Code, Obsidian and `vim` all work; the watcher picks
 the changes up.
+
+To keep it running all day, `contrib/` has a systemd user unit and a macOS
+launchd plist, and `contrib/README.md` says what the watcher does and does not do.

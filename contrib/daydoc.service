@@ -1,0 +1,15 @@
+[Unit]
+Description=DayDoc vault watcher
+Documentation=https://github.com/drsamonline/DayDoc
+After=default.target
+
+[Service]
+Type=simple
+# Replace %h/daydoc with your vault and %h/.daydoc with your state directory.
+Environment=DAYDOC_HOME=%h/.daydoc
+ExecStart=%h/.cargo/bin/daydoc -v %h/daydoc watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
