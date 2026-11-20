@@ -114,6 +114,12 @@ History is never edited.
 - **Export a period.** One self-contained HTML file — no scripts, no external
   requests, note bodies escaped and shown as text.
 - **Config without an editor.** `daydoc config set stale.sop 30`.
+- **Auto-link suggestions, never automatic.** `daydoc link` proposes links from a
+  shared person or project plus embedding similarity; accepting one writes the
+  link and carries the entities across, and never edits the body. No embedding
+  model is bundled yet, so the similarity is vocabulary, not meaning — the
+  pipeline is behind one trait in `src/embed.rs`, and swapping in MiniLM changes
+  that file only.
 - **Lint, with one safe fix.** `lint --fix` assigns a ULID to notes that have
   none and nothing else; duplicate ids, unknown citations and orphaned
   attachments stay reported, because they are judgement calls.
@@ -171,6 +177,7 @@ export      write a period as one self-contained html file
 config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
+link        suggest links between notes, and accept one
 reindex     rebuild the search index from the vault
 watch       reindex on external edits, commit on a timer
 backup      write a dated .tar.gz (optionally encrypted) and apply retention
@@ -241,6 +248,8 @@ src/
   secret.rs       key storage: environment, 0600 file, keychain-ready trait
   crypto.rs       AES-256-GCM for encrypted backups
   watch.rs        filesystem watcher, debounce, reindex and timed commit
+  embed.rs        embedding pipeline behind one trait (model swap point)
+  link.rs         auto-link suggestions and accept
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks
   stats.rs        vault counts and entities

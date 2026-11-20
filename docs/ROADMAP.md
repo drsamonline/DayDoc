@@ -40,10 +40,10 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 
 ## Next
 
-1. **Embeddings.** Add `sqlite-vec` alongside the FTS5 table; bundle
-   all-MiniLM-L6-v2 INT4 (~11 MB) and bert-tiny-NER INT4 (~2.2 MB) through
-   `rten`, zstd-compressed, decompressed at load. Auto-link suggestions (never
-   auto-accepted) and fuzzy SOP step matching ride on it.
+1. **Embeddings.** The pipeline, the vector store and auto-linking exist behind
+   `embed::Embedder`. What is missing is the model: bundle all-MiniLM-L6-v2 INT4
+   (~11 MB) and bert-tiny-NER INT4 (~2.2 MB) through `rten`, zstd-compressed and
+   decompressed at load, then move the cosine scan to `sqlite-vec`.
 2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
    shell, and write actions behind an Approve card.
 3. **Shell follow-ups.** A tray icon (`tray-icon` needs Rust 1.90 and

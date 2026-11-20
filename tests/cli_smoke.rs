@@ -658,3 +658,31 @@ fn candidate_cards_count_up_instead_of_repeating_one_reference() {
     assert_contains(&out, "approve as DR-0001?");
     assert_contains(&out, "approve as DR-0002?");
 }
+
+#[test]
+fn link_suggests_then_accepts() {
+    let sandbox = Sandbox::new("link");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "--text", "we decided okta sso pilot admin tooling enterprise pricing"]);
+    sandbox.ok(&["capture", "--text", "notes: okta sso pilot admin tooling enterprise pricing review"]);
+    sandbox.ok(&["capture", "--text", "payroll statutory filing interest penalty challan"]);
+
+    let out = sandbox.ok(&["link"]);
+    assert_contains(&out, "vocabulary only");
+    assert_contains(&out, "shared vocabulary");
+
+    // Suggestions write nothing.
+    let json = sandbox.ok(&["link", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("link json");
+    let first = parsed
+        .as_array()
+        .and_then(|entries| entries.first())
+        .expect("at least one note with a suggestion");
+    let note = first[0].as_str().expect("note path").to_string();
+    assert!(first[1].as_array().map(|a| !a.is_empty()).unwrap_or(false));
+
+    let out = sandbox.ok(&["link", "--note", &note, "--accept", "1"]);
+    assert_contains(&out, "linked");
+    let text = sandbox.read(&note);
+    assert_contains(&text, "links:");
+}

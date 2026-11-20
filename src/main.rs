@@ -11,8 +11,8 @@ use daydoc::error::DayDocError;
 use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, crypto, daily, export, handover, index, ledger, lint, llm,
-    meeting, migrate, search, secret, sop, stale, stats, watch, Vault,
+    attach, backup, capture, cluster, crypto, daily, embed, export, handover, index, ledger, lint,
+    link, llm, meeting, migrate, search, secret, sop, stale, stats, watch, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -58,6 +58,7 @@ enum Sub {
     Check(CheckCmd),
     Import(ImportCmd),
     Lint(LintCmd),
+    Link(LinkCmd),
     Sync(SyncCmd),
     Reindex(ReindexCmd),
     Ui(UiCmd),
@@ -311,6 +312,27 @@ struct SopCmd {
     #[argh(option)]
     /// proposal number to accept, 1-based
     index: Option<usize>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "link")]
+/// suggest links between notes, and accept one
+struct LinkCmd {
+    #[argh(option)]
+    /// only this note
+    note: Option<String>,
+    #[argh(option)]
+    /// accept suggestion N for --note, 1-based
+    accept: Option<usize>,
+    #[argh(option)]
+    /// suggestions per note (default: 3)
+    limit: Option<usize>,
+    #[argh(option)]
+    /// minimum similarity, 0 to 1 (default: 0.55)
+    min_score: Option<f32>,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -1229,6 +1251,76 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             });
             let report = export::run(&vault, &from, &to, &out)?;
             print!("{}", report.render());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Link(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let embedder = embed::HashEmbedder::default();
+            let limit = cmd.limit.unwrap_or(3);
+            let min_score = cmd.min_score.unwrap_or_else(link::default_min_score);
+
+            if let (Some(note), Some(index)) = (cmd.note.clone(), cmd.accept) {
+                let suggestions = link::suggest_for(&vault, &embedder, &note, limit, min_score)?;
+                let chosen = suggestions.get(index.saturating_sub(1)).ok_or_else(|| {
+                    DayDocError::Config(format!(
+                        "suggestion {index} is out of range ({} found)",
+                        suggestions.len()
+                    ))
+                })?;
+                let target = chosen.rel_path.clone();
+                let updated = link::accept(&vault, &note, &target)?;
+                println!(
+                    "linked {} → {} ({} link(s) now)",
+                    note,
+                    target,
+                    updated.frontmatter.links.len()
+                );
+                return Ok(ExitCode::SUCCESS);
+            }
+
+            if let Some(note) = cmd.note.clone() {
+                let suggestions = link::suggest_for(&vault, &embedder, &note, limit, min_score)?;
+                if cmd.json {
+                    print_json(&suggestions);
+                    return Ok(ExitCode::SUCCESS);
+                }
+                if suggestions.is_empty() {
+                    println!("nothing worth linking to {note}");
+                    return Ok(ExitCode::SUCCESS);
+                }
+                println!("suggestions for {note}:");
+                for (i, suggestion) in suggestions.iter().enumerate() {
+                    println!("  {}. {}", i + 1, suggestion.render().trim_end());
+                }
+                println!("accept one with: daydoc link --note {note} --accept 1");
+                return Ok(ExitCode::SUCCESS);
+            }
+
+            let all = link::suggest_all(&vault, &embedder, limit, min_score)?;
+            if cmd.json {
+                print_json(&all);
+                return Ok(ExitCode::SUCCESS);
+            }
+            if all.is_empty() {
+                println!("no unlinked note has a suggestion");
+                return Ok(ExitCode::SUCCESS);
+            }
+            for (note, suggestions) in &all {
+                println!("{note}");
+                for (i, suggestion) in suggestions.iter().enumerate() {
+                    println!("  {}. {}", i + 1, suggestion.render().trim_end());
+                }
+            }
+            println!(
+                "\n{} — no embedding model is bundled, so these are vocabulary matches, \
+                 not meaning. Dropping in the model changes nothing but src/embed.rs.",
+                if embedder.is_semantic() {
+                    "semantic"
+                } else {
+                    "vocabulary only"
+                }
+            );
             Ok(ExitCode::SUCCESS)
         }
 

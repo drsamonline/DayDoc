@@ -3,6 +3,16 @@
 All notable changes to DayDoc. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `daydoc link` — auto-link suggestions from a shared person or project plus
+  embedding similarity, with accept writing the link and carrying entities
+  across. The embedding pipeline sits behind one trait; the bundled embedder is a
+  deterministic feature hash, so the similarity is vocabulary rather than meaning
+  until the model lands.
+
 ## [0.1.0] — 2026-11-20
 
 The first release: the decision ledger and everything needed to keep it honest,
