@@ -43,10 +43,11 @@ pub struct BackupReport {
 impl BackupReport {
     pub fn render(&self) -> String {
         let mut out = format!(
-            "{}  {} file(s), {} bytes\n",
+            "{}  {} file(s), {} bytes{}\n",
             self.path.display(),
             self.files,
-            self.bytes
+            self.bytes,
+            if self.encrypted { ", AES-256-GCM" } else { "" }
         );
         out.push_str(&format!("{} backup(s) kept after retention\n", self.kept));
         for pruned in &self.pruned {
@@ -382,6 +383,7 @@ mod tests {
         let report = run(&vault, &dir).expect("backup");
         assert!(report.encrypted);
         assert!(report.path.to_string_lossy().ends_with(".tar.gz.enc"));
+        assert!(report.render().contains("AES-256-GCM"), "{}", report.render());
 
         let payload = std::fs::read(&report.path).expect("read");
         assert!(crypto::is_encrypted(&payload));
