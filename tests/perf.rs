@@ -44,9 +44,9 @@ fn five_hundred_notes_index_and_search_within_budget() {
     let vault = scratch_vault(notes);
 
     let started = Instant::now();
-    let indexed = daydoc::index::reindex(&vault).expect("reindex");
+    let report = daydoc::index::reindex(&vault).expect("reindex");
     let index_time = started.elapsed();
-    assert_eq!(indexed, notes);
+    assert_eq!(report.indexed, notes);
     assert!(
         index_time.as_secs_f64() < 5.0,
         "indexing {notes} notes took {index_time:?}"
@@ -68,10 +68,7 @@ fn five_hundred_notes_index_and_search_within_budget() {
         .expect("search");
     let second = started.elapsed();
     assert!(!again.is_empty());
-    assert!(
-        second.as_secs_f64() < 2.0,
-        "second search took {second:?}"
-    );
+    assert!(second.as_secs_f64() < 2.0, "second search took {second:?}");
 
     println!(
         "index {notes} notes: {index_time:?}; search: {search_time:?}; again: {second:?}"
