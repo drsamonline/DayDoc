@@ -73,7 +73,11 @@ pub fn parse(text: &str) -> Vec<Event> {
         }
         if upper.starts_with("END:VEVENT") {
             if let Some(text) = summary.take() {
-                events.push(Event { summary: text, date: date.take() });
+                // An event with no title cannot bias anything; drop it.
+                let text = text.trim().to_string();
+                if !text.is_empty() {
+                    events.push(Event { summary: text, date: date.take() });
+                }
             }
             inside = false;
             continue;
@@ -298,6 +302,12 @@ END:VCALENDAR\r
         // A truncated value is skipped rather than guessed.
         let events = parse("BEGIN:VEVENT\nSUMMARY:X\nDTSTART:2026\nEND:VEVENT\n");
         assert_eq!(events[0].date, None);
+    }
+
+    #[test]
+    fn an_event_without_a_title_is_dropped() {
+        let events = parse("BEGIN:VEVENT\nSUMMARY:\nDTSTART:20261120\nEND:VEVENT\n");
+        assert!(events.is_empty());
     }
 
     #[test]

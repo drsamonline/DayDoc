@@ -78,9 +78,13 @@ fn a_body_containing_fences_is_not_reparsed() {
 }
 
 #[test]
-fn duplicate_and_unknown_keys_keep_the_last_value_and_the_extras() {
-    let fm = Frontmatter::parse("id: 01A\nid: 01B\ncustom: kept\n").expect("parse");
-    assert_eq!(fm.id, "01B");
+fn duplicate_keys_are_refused_and_unknown_keys_are_kept() {
+    // A duplicated key is a mistake in the file, so it is refused with a reason
+    // rather than silently resolved one way or the other.
+    let err = Frontmatter::parse("id: 01A\nid: 01B\n").expect_err("duplicate accepted");
+    assert!(err.to_string().to_lowercase().contains("duplicat"), "{err}");
+
+    let fm = Frontmatter::parse("id: 01A\ncustom: kept\n").expect("parse");
     assert_eq!(fm.extra.get("custom").map(String::as_str), Some("kept"));
 }
 
@@ -121,11 +125,11 @@ fn the_calendar_parser_survives_malformed_files() {
     let cases = [
         "",
         "BEGIN:VCALENDAR\n",
-        "BEGIN:VEVENT\n",                        // never closed
-        "END:VEVENT\n",                          // closed without opening
-        "BEGIN:VEVENT\nEND:VEVENT\n",            // no summary
-        "BEGIN:VEVENT\nSUMMARY:\nEND:VEVENT\n",  // empty summary
-        "BEGIN:VEVENT\nDTSTART:\nEND:VEVENT\n",  // empty date
+        "BEGIN:VEVENT\n",
+        "END:VEVENT\n",
+        "BEGIN:VEVENT\nEND:VEVENT\n",
+        "BEGIN:VEVENT\nSUMMARY:\nEND:VEVENT\n",
+        "BEGIN:VEVENT\nDTSTART:\nEND:VEVENT\n",
         "BEGIN:VEVENT\nSUMMARY:A\nDTSTART:99999999999999\nEND:VEVENT\n",
         "SUMMARY:outside any event\n",
         "BEGIN:VEVENT\nSUMMARY:A\n  folded\n\tfolded again\nDTSTART:20261120\nEND:VEVENT\n",
