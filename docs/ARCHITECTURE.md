@@ -38,6 +38,8 @@ vault, so a synced vault never carries half-finished writes.
 | Module | Responsibility |
 | --- | --- |
 | `vault` | WAL, atomic commit, path safety, scan, trash, archive, audit log, SQLite counters |
+| `config` | `daydoc.toml`: defaults, validation, the settable keys |
+| `error` | One error type; every failure names its cause |
 | `frontmatter` | YAML in/out; unknown keys preserved so a round trip loses nothing |
 | `note` | Note model, `## Section` helpers, canonical decision body |
 | `types` | Note types and the decision lifecycle, including the allowed transitions |

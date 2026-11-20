@@ -36,9 +36,9 @@ fn top_level_commands() -> Vec<String> {
         if line.starts_with('}') {
             break;
         }
-        let trimmed = line.trim();
+        let trimmed = line.trim().trim_end_matches(',');
         if let Some(name) = trimmed.strip_suffix('(') {
-            if trimmed.ends_with('(') && name.chars().all(|c| c.is_alphanumeric()) {
+            if name.chars().all(|c| c.is_alphanumeric()) && !name.is_empty() {
                 out.push(name.to_ascii_lowercase());
             }
         }
@@ -90,7 +90,10 @@ fn the_agents_file_names_the_verification_commands() {
         "scripts/demo.sh",
         "no-default-features",
     ] {
-        assert!(AGENTS.contains(needle), "AGENTS.md does not mention {needle}");
+        assert!(
+            AGENTS.contains(needle),
+            "AGENTS.md does not mention {needle}"
+        );
     }
 }
 
@@ -105,7 +108,8 @@ fn the_readme_points_at_the_documents_that_exist() {
         "docs/USAGE.md",
         "CHANGELOG.md",
     ] {
-        let exists = std::path::Path::new(&format!("../{doc}")).exists();
+        // `cargo test` runs with the crate root as the working directory.
+        let exists = std::path::Path::new(doc).exists();
         assert!(exists, "{doc} is linked but missing");
     }
 }
