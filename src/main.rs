@@ -11,8 +11,8 @@ use daydoc::error::DayDocError;
 use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, daily, export, handover, index, ledger, lint, meeting, migrate,
-    search, sop, stale, stats, watch, Vault,
+    attach, backup, capture, cluster, daily, export, handover, index, ledger, lint, llm, meeting,
+    migrate, search, sop, stale, stats, watch, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -59,6 +59,7 @@ enum Sub {
     Sync(SyncCmd),
     Reindex(ReindexCmd),
     Watch(WatchCmd),
+    Chat(ChatCmd),
     Cluster(ClusterCmd),
     Attach(AttachCmd),
     Purge(PurgeCmd),
@@ -379,6 +380,21 @@ struct LintCmd {
     #[argh(switch)]
     /// print json instead of lines
     json: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "chat")]
+/// ask the optional llm about the vault (off by default)
+struct ChatCmd {
+    #[argh(positional)]
+    /// the question
+    question: String,
+    #[argh(option)]
+    /// how many notes to retrieve (default: 6)
+    k: Option<usize>,
+    #[argh(switch)]
+    /// show exactly what would be sent, send nothing
+    preview: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -1000,6 +1016,28 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 print!("{}", issue.render());
             }
             println!("\n{} issue(s)", issues.len());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Chat(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let settings = llm::LlmSettings::from_config(vault.config());
+            if !settings.enabled() {
+                return Err(DayDocError::Llm(
+                    "LLM is off. Every other feature works without it; to turn it on: \
+                     `daydoc config set llm_mode byok`, then set DAYDOC_LLM_KEY."
+                        .to_string(),
+                ));
+            }
+            let k = cmd.k.unwrap_or(llm::DEFAULT_K);
+            if cmd.preview {
+                let plan = llm::plan(&vault, &cmd.question, k)?;
+                println!("{}", plan.preview);
+                println!("\n--- system ---\n{}\n--- user ---\n{}", plan.system, plan.user);
+                return Ok(ExitCode::SUCCESS);
+            }
+            let answer = llm::ask_with(&vault, &cmd.question, k, &llm::HttpTransport)?;
+            println!("{answer}");
             Ok(ExitCode::SUCCESS)
         }
 

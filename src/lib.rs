@@ -26,6 +26,7 @@ pub mod ids;
 pub mod index;
 pub mod ledger;
 pub mod lint;
+pub mod llm;
 pub mod meeting;
 pub mod migrate;
 pub mod note;

@@ -465,3 +465,28 @@ fn watch_help_is_available() {
     assert!(text.contains("watch"), "no watch help: {text}");
     assert!(text.contains("debounce"), "missing debounce flag: {text}");
 }
+
+#[test]
+fn chat_refuses_when_the_llm_is_off() {
+    let sandbox = Sandbox::new("chat-off");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    let output = sandbox.run(&["chat", "what did we decide about okta"]);
+    assert!(!output.status.success());
+    let err = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(err.contains("LLM is off"), "unhelpful error: {err}");
+}
+
+#[test]
+fn chat_preview_shows_the_payload_without_sending() {
+    let sandbox = Sandbox::new("chat-preview");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    sandbox.ok(&["config", "set", "llm_mode", "byok"]);
+    sandbox.ok(&["config", "set", "llm_send_content", "true"]);
+
+    let out = sandbox.ok(&["chat", "okta", "--preview"]);
+    assert_contains(&out, "would send");
+    assert_contains(&out, "DR-0001");
+    assert_contains(&out, "--- system ---");
+}

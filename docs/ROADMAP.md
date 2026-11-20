@@ -16,6 +16,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
 - Stats, config show/set, single-file HTML export
 - Release workflow: Linux and Windows archives plus a `.deb` on `v*` tags
+- Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
+  shapes for OpenAI-compatible, Anthropic and Gemini
 - Watcher: debounced reindex plus timed commit for external edits
 - Structured `--json` for handover, wrap and digest
 - Lint: ids, types, citations, links, attachments
@@ -34,7 +36,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    all-MiniLM-L6-v2 INT4 (~11 MB) and bert-tiny-NER INT4 (~2.2 MB) through
    `rten`, zstd-compressed, decompressed at load. Auto-link suggestions (never
    auto-accepted) and fuzzy SOP step matching ride on it.
-2. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
+2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
+   shell, and write actions behind an Approve card.
+3. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
    `Ctrl+Shift+K`, morning plan on `Ctrl+Shift+M`, tray badge for stale notes
    and the re-verify entry point.
 3. **Backup encryption.** AES-256-GCM with the key in the OS keychain;

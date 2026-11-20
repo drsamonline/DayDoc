@@ -46,6 +46,9 @@ pub enum DayDocError {
 
     #[error("watcher error: {0}")]
     Watch(String),
+
+    #[error("llm error: {0}")]
+    Llm(String),
 }
 
 impl DayDocError {

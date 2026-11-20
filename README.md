@@ -108,9 +108,18 @@ History is never edited.
 - **Lint.** Missing and duplicate ids, unknown types, citations of decisions
   that do not exist, broken `links:`, missing and orphaned attachments.
 
-An optional LLM (BYOK or a local server) adds abstractive summaries and chat.
-It is off by default, there is no download prompt, and no feature above needs
-it.
+An optional LLM (BYOK or a local server) adds chat over the ledger. It is off by
+default, there is no download prompt, and no feature above needs it. When it is
+on, three things hold:
+
+- retrieval sends the top-k notes only, never the vault, capped at 8,000
+  characters;
+- `llm_send_content = false` refuses to send anything, whatever else is set;
+- `daydoc chat --preview` prints the exact system prompt and note text that would
+  leave the machine, and sends nothing.
+
+The key is read from `DAYDOC_LLM_KEY` (never from the config file, never logged);
+the OS keychain is the next step.
 
 ## Guarantees
 
@@ -141,6 +150,7 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+chat        ask the optional llm (off by default, --preview shows the payload)
 stats       vault counts, entities and dates
 export      write a period as one self-contained html file
 config      show or change daydoc.toml
@@ -185,6 +195,7 @@ and self-update. See `docs/ROADMAP.md`.
 
 ```
 src/
+  llm.rs          optional BYOK chat: retrieval, preview, provider requests
   watch.rs        filesystem watcher, debounce, reindex and timed commit
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks
