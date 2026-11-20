@@ -12,8 +12,8 @@ use daydoc::error::DayDocError;
 use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
-    attach, backup, capture, cluster, crypto, daily, embed, export, handover, index, ledger, lint,
-    link, llm, meeting, migrate, search, secret, sop, stale, stats, watch, Vault,
+    attach, backup, calendar, capture, cluster, crypto, daily, embed, export, handover, index,
+    ledger, lint, link, llm, meeting, migrate, search, secret, sop, stale, stats, watch, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -58,6 +58,7 @@ enum Sub {
     Export(ExportCmd),
     Check(CheckCmd),
     Import(ImportCmd),
+    Calendar(CalendarCmd),
     Lint(LintCmd),
     Mobile(MobileCmd),
     Link(LinkCmd),
@@ -314,6 +315,21 @@ struct SopCmd {
     #[argh(option)]
     /// proposal number to accept, 1-based
     index: Option<usize>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "calendar")]
+/// suggest project tags from an ics calendar, read-only
+struct CalendarCmd {
+    #[argh(positional)]
+    /// path to the .ics file
+    file: String,
+    #[argh(option)]
+    /// accept suggestion N, 1-based
+    accept: Option<usize>,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -740,11 +756,11 @@ fn advance_reference(reference: &str, by: u64) -> String {
 
 fn normalise_key_name(raw: &str) -> daydoc::Result<String> {
     let name = raw.trim().to_ascii_lowercase();
-    if matches!(name.as_str(), "backup" | "llm" | "mobile") {
+    if matches!(name.as_str(), "backup" | "llm" | "mobile" | "mobile-read") {
         Ok(name)
     } else {
         Err(DayDocError::Config(format!(
-            "unknown key \"{raw}\"; use backup, llm or mobile"
+            "unknown key \"{raw}\"; use backup, llm, mobile or mobile-read"
         )))
     }
 }
@@ -1265,6 +1281,44 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
+        Sub::Calendar(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            if !vault.config().calendar_enabled {
+                return Err(DayDocError::Config(
+                    "the calendar signal is off; enable it with \
+                     `daydoc config set calendar_enabled true`"
+                        .to_string(),
+                ));
+            }
+            let events = calendar::load(&PathBuf::from(&cmd.file))?;
+            let suggestions = calendar::tag_suggestions(&vault, &events)?;
+            if cmd.json {
+                print_json(&suggestions);
+                return Ok(ExitCode::SUCCESS);
+            }
+            if let Some(index) = cmd.accept {
+                let suggestion = suggestions.get(index.saturating_sub(1)).ok_or_else(|| {
+                    DayDocError::Config(format!(
+                        "suggestion {index} is out of range ({} found)",
+                        suggestions.len()
+                    ))
+                })?;
+                let tagged = calendar::accept(&vault, suggestion)?;
+                println!("tagged {tagged} note(s) with {}", suggestion.project);
+                return Ok(ExitCode::SUCCESS);
+            }
+            println!("{} event(s) in {}", events.len(), cmd.file);
+            if suggestions.is_empty() {
+                println!("no note shares a meaningful word with an event on its day");
+                return Ok(ExitCode::SUCCESS);
+            }
+            for (i, suggestion) in suggestions.iter().enumerate() {
+                println!("{}. {}", i + 1, suggestion.render().trim_end());
+            }
+            println!("accept one with: daydoc calendar {} --accept 1", cmd.file);
+            Ok(ExitCode::SUCCESS)
+        }
+
         Sub::Mobile(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             if !vault.config().mobile_enabled {
@@ -1280,14 +1334,21 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 )
             })?;
             let addr = cmd.addr.unwrap_or_else(|| "0.0.0.0:7373".to_string());
+            // Reading needs its own token *and* the vault switched away from
+            // capture-only. Either alone is not enough.
+            let read_token = if vault.config().mobile_capture_only {
+                None
+            } else {
+                secret::resolve(&vault, secret::MOBILE_READ)
+            };
             #[cfg(feature = "mobile")]
             {
-                daydoc::mobile::serve(vault, &addr, token)?;
+                daydoc::mobile::serve(vault, &addr, token, read_token)?;
                 Ok(ExitCode::SUCCESS)
             }
             #[cfg(not(feature = "mobile"))]
             {
-                let _ = (vault, token, addr);
+                let _ = (vault, token, addr, read_token);
                 Err(DayDocError::Config(
                     "this build has no mobile surface (feature \"mobile\" is off)".to_string(),
                 ))

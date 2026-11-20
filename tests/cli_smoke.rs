@@ -686,3 +686,44 @@ fn link_suggests_then_accepts() {
     let text = sandbox.read(&note);
     assert_contains(&text, "links:");
 }
+
+#[test]
+fn calendar_suggests_and_accepts_a_project_tag() {
+    let sandbox = Sandbox::new("calendar");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["config", "set", "calendar_enabled", "true"]);
+    let today = chrono::Local::now().format("%Y%m%d").to_string();
+    std::fs::write(
+        sandbox.vault().join("meetings/atlas.md"),
+        "---\nid: 01A\ntype: meeting\ntitle: Atlas cutover plan\n---\natlas migration notes\n",
+    )
+    .expect("note");
+    let ics = sandbox.root.join("calendar.ics");
+    std::fs::write(
+        &ics,
+        format!("BEGIN:VEVENT\nSUMMARY:Atlas migration review\nDTSTART:{today}T090000Z\nEND:VEVENT\n"),
+    )
+    .expect("ics");
+
+    let out = sandbox.ok(&["calendar", ics.to_str().unwrap()]);
+    assert_contains(&out, "Atlas migration review");
+    assert_contains(&out, "meetings/atlas.md");
+
+    let out = sandbox.ok(&["calendar", ics.to_str().unwrap(), "--accept", "1"]);
+    assert_contains(&out, "tagged 1 note(s)");
+    let note = sandbox.read("meetings/atlas.md");
+    assert_contains(&note, "projects: [");
+    assert_contains(&note, "Atlas migration review");
+}
+
+#[test]
+fn calendar_is_off_until_enabled() {
+    let sandbox = Sandbox::new("calendar-off");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    let ics = sandbox.root.join("calendar.ics");
+    std::fs::write(&ics, "BEGIN:VEVENT\nSUMMARY:Anything\nEND:VEVENT\n").expect("ics");
+    let output = sandbox.run(&["calendar", ics.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let err = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(err.contains("calendar signal is off"), "{err}");
+}

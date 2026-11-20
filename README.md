@@ -178,6 +178,7 @@ config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 link        suggest links between notes, and accept one
+calendar    suggest project tags from an .ics calendar (read-only)
 mobile      serve the capture-only phone page on the local network
 reindex     rebuild the search index from the vault
 watch       reindex on external edits, commit on a timer
@@ -223,6 +224,23 @@ daydoc mobile --addr 0.0.0.0:7373
 
 The token is compared in constant time and never logged. There is no TLS: run it
 on a network you trust, or behind a tunnel.
+
+Reading from the phone needs two separate things, deliberately:
+
+```bash
+daydoc config set mobile_capture_only false
+daydoc key set mobile-read --generate
+```
+
+The capture token cannot read, and the read token cannot capture.
+
+## Calendar, read-only
+
+`daydoc calendar meeting.ics` reads an iCalendar file and shows which notes were
+written on an event's day and share a meaningful word with its title — "Atlas
+migration review" matching the three notes from that day. Accepting a suggestion
+writes the event title into those notes' `projects`; the calendar itself is never
+written to and nothing is tagged without a click.
 
 ## The window
 

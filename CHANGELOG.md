@@ -7,9 +7,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `daydoc calendar` — a read-only `.ics` signal: notes on an event's day that
+  share a meaningful word with its title, with accept writing the project tag.
 - `daydoc mobile` — a capture-only page for a phone on the same network, bearer
   token, offline queue in `localStorage`, and read endpoints that refuse with a
-  reason rather than pretending not to exist.
+  reason rather than pretending not to exist. A separate read token, enabled with
+  `mobile_capture_only = false`, unlocks `/notes` and `/note`; the capture token
+  cannot read and the read token cannot capture.
 - `daydoc link` — auto-link suggestions from a shared person or project plus
   embedding similarity, with accept writing the link and carrying entities
   across. The embedding pipeline sits behind one trait; the bundled embedder is a

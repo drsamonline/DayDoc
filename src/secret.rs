@@ -19,6 +19,7 @@ use crate::vault::Vault;
 pub const LLM: &str = "llm";
 pub const BACKUP: &str = "backup";
 pub const MOBILE: &str = "mobile";
+pub const MOBILE_READ: &str = "mobile-read";
 pub const SERVICE: &str = "daydoc";
 
 /// Where a key ended up.

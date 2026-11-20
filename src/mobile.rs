@@ -4,7 +4,7 @@
 //! second token and is not implemented; a request that tries to read is refused
 //! rather than quietly served.
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
@@ -21,6 +21,8 @@ pub const TOKEN_NAME: &str = "mobile";
 pub struct AppState {
     pub vault: Vault,
     pub token: String,
+    /// `None` means reading is switched off, which is the default.
+    pub read_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,26 +96,96 @@ async fn page_handler() -> Html<&'static str> {
     Html(PAGE)
 }
 
-/// Any read attempt is refused with the reason, not a 404 that hides it.
+/// Reading is refused with the reason rather than a 404 that hides it.
 async fn read_refused() -> Response {
     error(
         StatusCode::FORBIDDEN,
-        "this surface is capture-only; reading the vault from a phone is not enabled",
+        "this surface is capture-only; set mobile_capture_only = false and add a read token \
+         (daydoc key set mobile-read --generate) to read from a phone",
     )
 }
 
-pub fn router(vault: Vault, token: String) -> Router {
-    let state = AppState { vault, token };
+fn read_authorised(headers: &HeaderMap, state: &AppState) -> bool {
+    match &state.read_token {
+        Some(token) => token_matches(headers, token),
+        None => false,
+    }
+}
+
+async fn notes_handler(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if !read_authorised(&headers, &state) {
+        return read_refused().await;
+    }
+    let scan = match state.vault.scan() {
+        Ok(scan) => scan,
+        Err(err) => return error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+    };
+    let notes: Vec<serde_json::Value> = scan
+        .notes
+        .iter()
+        .map(|note| {
+            serde_json::json!({
+                "path": note.rel_path,
+                "title": note.title(),
+                "type": note.note_type().as_str(),
+            })
+        })
+        .collect();
+    (StatusCode::OK, Json(serde_json::json!({ "notes": notes }))).into_response()
+}
+
+async fn note_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    if !read_authorised(&headers, &state) {
+        return read_refused().await;
+    }
+    let path = match params.get("path") {
+        Some(path) => path.clone(),
+        None => return error(StatusCode::BAD_REQUEST, "a path is required"),
+    };
+    // Exact match against the vault listing: no traversal, no guessing.
+    let known = state
+        .vault
+        .list_rels()
+        .map(|rels| rels.contains(&path))
+        .unwrap_or(false);
+    if !known {
+        return error(StatusCode::NOT_FOUND, "no such note in the vault");
+    }
+    match state.vault.load(&path) {
+        Ok(note) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "path": note.rel_path,
+                "title": note.title(),
+                "type": note.note_type().as_str(),
+                "body": note.body,
+            })),
+        )
+            .into_response(),
+        Err(err) => error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+    }
+}
+
+pub fn router(vault: Vault, token: String, read_token: Option<String>) -> Router {
+    let state = AppState {
+        vault,
+        token,
+        read_token,
+    };
     Router::new()
         .route("/", get(page_handler))
         .route("/capture", post(capture_handler))
-        .route("/notes", get(read_refused))
-        .route("/search", get(read_refused))
+        .route("/notes", get(notes_handler))
+        .route("/note", get(note_handler))
         .with_state(state)
 }
 
 /// Serve until the process stops. Binding is the caller's address.
-pub fn serve(vault: Vault, addr: &str, token: String) -> Result<()> {
+pub fn serve(vault: Vault, addr: &str, token: String, read_token: Option<String>) -> Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -122,8 +194,15 @@ pub fn serve(vault: Vault, addr: &str, token: String) -> Result<()> {
         let listener = tokio::net::TcpListener::bind(addr)
             .await
             .map_err(|err| DayDocError::Config(format!("could not bind {addr}: {err}")))?;
-        println!("mobile capture listening on http://{addr} (capture only)");
-        axum::serve(listener, router(vault, token))
+        println!(
+            "mobile listening on http://{addr} ({})",
+            if read_token.is_some() {
+                "capture and read"
+            } else {
+                "capture only"
+            }
+        );
+        axum::serve(listener, router(vault, token, read_token))
             .await
             .map_err(|err| DayDocError::Config(format!("server stopped: {err}")))
     })
@@ -205,7 +284,15 @@ mod tests {
     use tower::ServiceExt;
 
     fn app(vault: Vault) -> Router {
-        router(vault, "secret-token".to_string())
+        router(vault, "secret-token".to_string(), None)
+    }
+
+    fn reading_app(vault: Vault) -> Router {
+        router(
+            vault,
+            "secret-token".to_string(),
+            Some("read-token".to_string()),
+        )
     }
 
     async fn body_text(response: Response) -> String {
@@ -294,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn reading_is_refused_with_a_reason() {
         let vault = crate::vault::test_support::temp_vault();
-        for path in ["/notes", "/search"] {
+        for path in ["/notes", "/note?path=x"] {
             let response = app(vault.clone())
                 .oneshot(
                     Request::builder()
@@ -308,6 +395,83 @@ mod tests {
             assert_eq!(response.status(), StatusCode::FORBIDDEN, "{path}");
             let body = body_text(response).await;
             assert!(body.contains("capture-only"), "{body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_read_token_lists_and_reads_a_note() {
+        let vault = crate::vault::test_support::temp_vault();
+        vault
+            .write(
+                "inbox/a.md",
+                "---\nid: 01A\ntype: idea\ntitle: Readable\n---\nthe body\n",
+            )
+            .expect("note");
+
+        let response = reading_app(vault.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/notes")
+                    .header("authorization", "Bearer read-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_text(response).await;
+        assert!(body.contains("Readable"), "{body}");
+
+        let response = reading_app(vault)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/note?path=inbox/a.md")
+                    .header("authorization", "Bearer read-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_text(response).await;
+        assert!(body.contains("the body"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn the_capture_token_does_not_grant_reading() {
+        let vault = crate::vault::test_support::temp_vault();
+        let response = reading_app(vault)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/notes")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn a_path_outside_the_vault_is_not_found() {
+        let vault = crate::vault::test_support::temp_vault();
+        for path in ["/note?path=../escape.md", "/note?path=/etc/passwd"] {
+            let response = reading_app(vault.clone())
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(path)
+                        .header("authorization", "Bearer read-token")
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{path}");
         }
     }
 

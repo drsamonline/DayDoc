@@ -144,12 +144,6 @@ impl Config {
                 "min_classification_confidence must be between 0.0 and 1.0".to_string(),
             ));
         }
-        if self.mobile_enabled && !self.mobile_capture_only {
-            return Err(DayDocError::Config(
-                "mobile reading is not implemented at v1; keep mobile_capture_only = true"
-                    .to_string(),
-            ));
-        }
         if self.trash_retention_days < 1 {
             return Err(DayDocError::Config(
                 "trash_retention_days must be at least 1; 0 would delete the trash \

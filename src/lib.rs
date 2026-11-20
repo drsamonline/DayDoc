@@ -13,6 +13,7 @@
 
 pub mod attach;
 pub mod backup;
+pub mod calendar;
 pub mod capture;
 pub mod classify;
 pub mod cluster;
