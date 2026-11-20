@@ -441,6 +441,9 @@ struct LintCmd {
     #[argh(switch)]
     /// print json instead of lines
     json: bool,
+    #[argh(switch)]
+    /// assign ids to notes that have none, then report
+    fix: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -1058,19 +1061,15 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                         })?;
                         buffer.trim().to_string()
                     };
-                    secret::set(&vault, &name, &value)?;
-                    println!(
-                        "{name} key stored in {}",
-                        vault.state_dir().join("keys").display()
-                    );
+                    let location = secret::set(&vault, &name, &value)?;
+                    println!("{name} key stored in {}", location.describe());
                     Ok(ExitCode::SUCCESS)
                 }
                 KeyAction::Show(show) => {
                     let name = normalise_key_name(&show.name)?;
-                    if secret::is_set(&vault, &name) {
-                        println!("{name} key: set");
-                    } else {
-                        println!("{name} key: not set");
+                    match secret::location(&vault, &name) {
+                        Some(place) => println!("{name} key: set in {place}"),
+                        None => println!("{name} key: not set"),
                     }
                     Ok(ExitCode::SUCCESS)
                 }
@@ -1144,6 +1143,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
 
         Sub::Lint(cmd) => {
             let vault = open_vault(explicit, read_only)?;
+            if cmd.fix {
+                let report = lint::fix(&vault)?;
+                print!("{}", report.render());
+            }
             let issues = lint::scan(&vault)?;
             if cmd.json {
                 print_json(&issues);

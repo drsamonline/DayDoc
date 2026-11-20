@@ -114,6 +114,54 @@ fn asset_files(vault: &Vault) -> Result<Vec<String>> {
     Ok(out)
 }
 
+/// What `lint --fix` changed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FixReport {
+    pub assigned_ids: usize,
+    pub files: Vec<String>,
+}
+
+impl FixReport {
+    pub fn render(&self) -> String {
+        if self.assigned_ids == 0 {
+            return "nothing to fix\n".to_string();
+        }
+        let mut out = format!("assigned {} missing id(s)\n", self.assigned_ids);
+        for file in &self.files {
+            out.push_str(&format!("  {file}\n"));
+        }
+        out
+    }
+}
+
+/// The one fix lint is allowed to make: a note with no `id` gets a fresh ULID.
+///
+/// Nothing else is repaired automatically. A duplicate id, an unknown decision
+/// reference or an orphaned attachment are judgement calls, and lint reports
+/// them instead of guessing.
+pub fn fix(vault: &Vault) -> Result<FixReport> {
+    let mut report = FixReport::default();
+    for note in vault.scan()?.notes {
+        if !note.frontmatter.id.trim().is_empty() {
+            continue;
+        }
+        let mut note = note;
+        note.frontmatter.id = ids::new_ulid();
+        note.frontmatter.updated = Some(crate::vault::now_iso());
+        vault.save(&note)?;
+        report.assigned_ids += 1;
+        report.files.push(note.rel_path.clone());
+    }
+    if report.assigned_ids > 0 {
+        vault.audit(
+            "lint-fix",
+            &report.assigned_ids.to_string(),
+            "assigned missing note ids",
+        )?;
+    }
+    Ok(report)
+}
+
 /// Every problem lint can see, in one pass over the vault.
 pub fn scan(vault: &Vault) -> Result<Vec<Issue>> {
     let notes = vault.scan()?.notes;
@@ -273,6 +321,35 @@ mod tests {
         assert!(issues.iter().any(|i| i.kind == IssueKind::BrokenLink));
         assert!(issues.iter().any(|i| i.kind == IssueKind::MissingAsset));
         assert!(issues.iter().any(|i| i.kind == IssueKind::OrphanAsset));
+    }
+
+    #[test]
+    fn fix_assigns_a_missing_id_and_leaves_the_rest_alone() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/noid.md", "---\ntype: idea\ntitle: No id\n---\nbody\n")
+            .expect("write");
+        vault
+            .write("inbox/ok.md", "---\nid: 01KEEP\ntype: idea\ntitle: Fine\n---\nbody\n")
+            .expect("write");
+
+        let report = fix(&vault).expect("fix");
+        assert_eq!(report.assigned_ids, 1);
+        assert_eq!(report.files, vec!["inbox/noid.md".to_string()]);
+        assert!(report.render().contains("assigned 1"));
+
+        let fixed = vault.load("inbox/noid.md").expect("reload");
+        assert_eq!(fixed.frontmatter.id.len(), 26);
+        let untouched = vault.load("inbox/ok.md").expect("reload");
+        assert_eq!(untouched.frontmatter.id, "01KEEP");
+
+        assert!(scan(&vault)
+            .expect("scan")
+            .iter()
+            .all(|issue| issue.kind != IssueKind::MissingId));
+
+        // A second pass has nothing left to do.
+        assert_eq!(fix(&vault).expect("fix again").assigned_ids, 0);
     }
 
     #[test]

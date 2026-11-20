@@ -93,9 +93,10 @@ History is never edited.
   (AES-256-GCM) and refuses to write anything at all without a key.
 - **Restore.** `daydoc restore <file> --into <dir>`, decrypting when needed and
   refusing archive entries that would escape the target directory.
-- **Keys.** `daydoc key set backup --generate` prints a key once and stores it
-  `0600` in the state directory; `DAYDOC_BACKUP_KEY` overrides it. Values are
-  never printed by `key show`.
+- **Keys.** `daydoc key set backup --generate` prints a key once and stores it in
+  the OS keychain, falling back to a `0600` file in the state directory on a
+  machine with no usable keychain; `key show` says which store holds it and
+  `DAYDOC_BACKUP_KEY` overrides both. Values are never printed.
 - **Identity guard.** Change a note's `id` and the file is a new note: the old
   id stays in the index and a warning lands in `_meta/warnings/`.
 - **`--json` on `decisions`, `search`, `stale`, `status` and `lint`.**
@@ -111,6 +112,9 @@ History is never edited.
 - **Export a period.** One self-contained HTML file — no scripts, no external
   requests, note bodies escaped and shown as text.
 - **Config without an editor.** `daydoc config set stale.sop 30`.
+- **Lint, with one safe fix.** `lint --fix` assigns a ULID to notes that have
+  none and nothing else; duplicate ids, unknown citations and orphaned
+  attachments stay reported, because they are judgement calls.
 - **Lint.** Missing and duplicate ids, unknown types, citations of decisions
   that do not exist, broken `links:`, missing and orphaned attachments.
 

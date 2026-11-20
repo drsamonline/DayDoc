@@ -16,6 +16,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
 - Stats, config show/set, single-file HTML export
 - Release workflow: Linux and Windows archives plus a `.deb` on `v*` tags
+- OS keychain via `keyring`, with the `0600` file as fallback
+- `lint --fix` for notes with no id
 - Encrypted backups (AES-256-GCM), restore, and a key store with a `0600` file
 - Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
   shapes for OpenAI-compatible, Anthropic and Gemini
@@ -43,8 +45,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 3. **Shell follow-ups.** Tray icon and global hotkeys (`Ctrl+Shift+Space`,
    `Ctrl+Shift+K`, `Ctrl+Shift+M`), an Indic-capable font bundle, and the
    capture overlay that floats above other windows.
-3. **OS keychain.** Move the key store from a `0600` file to the platform
-   keychain behind the existing `KeyStore` trait.
+3. **Keychain edge cases.** The keychain store exists; what is left is a
+   Windows credential-manager test pass and a locked-session error message.
 4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
 5. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.
