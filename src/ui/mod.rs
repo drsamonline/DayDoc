@@ -45,25 +45,63 @@ impl View {
     }
 }
 
-/// Fonts bundled with the shell: Latin from egui, Devanagari and Gujarati from
-/// the Lohit project (SIL OFL 1.1, see `assets/fonts/OFL.txt`).
-const DEVANAGARI: &[u8] = include_bytes!("../../assets/fonts/Lohit-Devanagari.ttf");
-const GUJARATI: &[u8] = include_bytes!("../../assets/fonts/Lohit-Gujarati.ttf");
+/// Fonts bundled with the shell: Latin from egui, ten Indic scripts from the
+/// Lohit project (SIL OFL 1.1, see `assets/fonts/OFL.txt`).
+pub const BUNDLED_FONTS: [(&str, &[u8]); 10] = [
+    (
+        "lohit-devanagari",
+        include_bytes!("../../assets/fonts/Lohit-Devanagari.ttf"),
+    ),
+    (
+        "lohit-gujarati",
+        include_bytes!("../../assets/fonts/Lohit-Gujarati.ttf"),
+    ),
+    (
+        "lohit-bengali",
+        include_bytes!("../../assets/fonts/Lohit-Bengali.ttf"),
+    ),
+    (
+        "lohit-assamese",
+        include_bytes!("../../assets/fonts/Lohit-Assamese.ttf"),
+    ),
+    (
+        "lohit-gurmukhi",
+        include_bytes!("../../assets/fonts/Lohit-Gurmukhi.ttf"),
+    ),
+    (
+        "lohit-odia",
+        include_bytes!("../../assets/fonts/Lohit-Odia.ttf"),
+    ),
+    (
+        "lohit-tamil",
+        include_bytes!("../../assets/fonts/Lohit-Tamil.ttf"),
+    ),
+    (
+        "lohit-telugu",
+        include_bytes!("../../assets/fonts/Lohit-Telugu.ttf"),
+    ),
+    (
+        "lohit-kannada",
+        include_bytes!("../../assets/fonts/Lohit-Kannada.ttf"),
+    ),
+    (
+        "lohit-malayalam",
+        include_bytes!("../../assets/fonts/Lohit-Malayalam.ttf"),
+    ),
+];
 
 fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    fonts.font_data.insert(
-        "lohit-devanagari".to_string(),
-        egui::FontData::from_static(DEVANAGARI),
-    );
-    fonts.font_data.insert(
-        "lohit-gujarati".to_string(),
-        egui::FontData::from_static(GUJARATI),
-    );
+    for (name, bytes) in BUNDLED_FONTS {
+        fonts
+            .font_data
+            .insert(name.to_string(), egui::FontData::from_static(bytes));
+    }
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
         let entry = fonts.families.entry(family).or_default();
-        entry.push("lohit-devanagari".to_string());
-        entry.push("lohit-gujarati".to_string());
+        for (name, _) in BUNDLED_FONTS {
+            entry.push(name.to_string());
+        }
     }
     ctx.set_fonts(fonts);
 }
@@ -507,12 +545,13 @@ mod tests {
     }
 
     #[test]
-    fn the_indic_fonts_are_bundled() {
-        assert!(DEVANAGARI.len() > 10_000);
-        assert!(GUJARATI.len() > 10_000);
-        // TrueType signature.
-        assert_eq!(&DEVANAGARI[..4], &[0x00, 0x01, 0x00, 0x00]);
-        assert_eq!(&GUJARATI[..4], &[0x00, 0x01, 0x00, 0x00]);
+    fn every_indic_font_is_bundled_and_is_a_truetype_file() {
+        assert_eq!(BUNDLED_FONTS.len(), 10);
+        for (name, bytes) in BUNDLED_FONTS {
+            assert!(bytes.len() > 10_000, "{name} looks empty");
+            // TrueType signature: 0x00010000.
+            assert_eq!(&bytes[..4], &[0x00, 0x01, 0x00, 0x00], "{name} is not a TTF");
+        }
     }
 
     #[test]

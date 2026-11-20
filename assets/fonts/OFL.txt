@@ -1,5 +1,8 @@
-Lohit Devanagari and Lohit Gujarati
-=================================
+Lohit fonts bundled with DayDoc
+==============================
+
+Devanagari, Gujarati, Bengali, Assamese, Gurmukhi, Odia, Tamil, Telugu,
+Kannada, Malayalam
 
 Copyright 2006, Modular Infotech Pvt Ltd.
 Copyright 2009, Red Hat, Inc.

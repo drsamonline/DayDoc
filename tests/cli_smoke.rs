@@ -560,3 +560,40 @@ fn ui_help_is_available() {
     );
     assert!(text.contains("ui"), "no ui help: {text}");
 }
+
+#[test]
+fn the_json_surface_is_complete() {
+    let sandbox = Sandbox::new("json-all");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+    sandbox.ok(&["capture", "We decided to adopt Okta for SSO across all products."]);
+    sandbox.ok(&["accept", "DR-0001"]);
+
+    let transcript = sandbox.root.join("transcript.txt");
+    std::fs::write(
+        &transcript,
+        "Bob: we decided to move billing to Razorpay.\n- [ ] Priya will prepare the checklist\n",
+    )
+    .expect("write transcript");
+
+    let out = sandbox.ok(&["meeting", transcript.to_str().unwrap(), "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("meeting json");
+    assert!(parsed["candidates"].as_array().map(|a| !a.is_empty()).unwrap_or(false));
+    assert_eq!(parsed["next_reference"], "DR-0002");
+
+    let out = sandbox.ok(&["ask", "okta", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("ask json");
+    assert_eq!(parsed[0]["decision_id"], "DR-0001");
+
+    let source = sandbox.root.join("import-source");
+    std::fs::create_dir_all(&source).expect("dir");
+    std::fs::write(source.join("note.md"), "we agreed to ship on friday\n").expect("write");
+    let out = sandbox.ok(&["import", source.to_str().unwrap(), "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("import json");
+    assert_eq!(parsed["entries"].as_array().map(|a| a.len()).unwrap_or(0), 1);
+
+    let out = sandbox.ok(&["sop", "--json"]);
+    serde_json::from_str::<serde_json::Value>(&out).expect("sop json");
+
+    let out = sandbox.ok(&["cluster", "--json"]);
+    serde_json::from_str::<serde_json::Value>(&out).expect("cluster json");
+}

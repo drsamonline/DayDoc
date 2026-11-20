@@ -6,6 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+
 use crate::classify::classify;
 use crate::error::{DayDocError, Result};
 use crate::frontmatter;
@@ -18,7 +20,7 @@ const SKIP_DIRS: [&str; 8] = [
     "_meta", "_trash", "_archive", "assets", "node_modules", "target", "vendor", "dist",
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImportEntry {
     pub source: String,
     pub rel_path: String,
@@ -57,7 +59,7 @@ impl ImportEntry {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ImportReport {
     pub entries: Vec<ImportEntry>,
     pub written: usize,

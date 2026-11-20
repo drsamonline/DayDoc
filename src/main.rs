@@ -104,6 +104,9 @@ struct MeetingCmd {
     #[argh(positional)]
     /// path to the transcript or note
     file: String,
+    #[argh(switch)]
+    /// print json instead of cards
+    json: bool,
     #[argh(option)]
     /// approve these candidates, 1-based, comma separated
     approve: Option<String>,
@@ -215,6 +218,9 @@ struct AskCmd {
     #[argh(positional)]
     /// the question
     question: String,
+    #[argh(switch)]
+    /// print json instead of cards
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -299,6 +305,9 @@ struct SopCmd {
     #[argh(switch)]
     /// accept a proposal instead of listing
     accept: bool,
+    #[argh(switch)]
+    /// print json instead of a listing
+    json: bool,
     #[argh(option)]
     /// proposal number to accept, 1-based
     index: Option<usize>,
@@ -508,6 +517,9 @@ struct ImportCmd {
     /// folder of Markdown files to import
     path: String,
     #[argh(switch)]
+    /// print json instead of a report
+    json: bool,
+    #[argh(switch)]
     /// show what would happen, write nothing
     dry_run: bool,
 }
@@ -519,6 +531,9 @@ struct ClusterCmd {
     #[argh(switch)]
     /// accept a proposal instead of listing
     accept: bool,
+    #[argh(switch)]
+    /// print json instead of a listing
+    json: bool,
     #[argh(option)]
     /// proposal number to accept, 1-based
     index: Option<usize>,
@@ -726,6 +741,16 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             let actions = meeting::extract_action_items(&text);
             let next = meeting::next_reference(&vault);
 
+            if cmd.json {
+                print_json(&serde_json::json!({
+                    "file": cmd.file,
+                    "next_reference": next,
+                    "candidates": candidates,
+                    "action_items": actions,
+                }));
+                return Ok(ExitCode::SUCCESS);
+            }
+
             println!("{} candidate(s) in {}", candidates.len(), cmd.file);
             for (i, candidate) in candidates.iter().enumerate() {
                 println!("  {}. {}", i + 1, candidate.card(&next));
@@ -893,6 +918,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Ask(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let cards = search::ask(&vault, &cmd.question)?;
+            if cmd.json {
+                print_json(&cards);
+                return Ok(ExitCode::SUCCESS);
+            }
             if cards.is_empty() {
                 println!("nothing in the ledger answers that");
                 return Ok(ExitCode::SUCCESS);
@@ -999,6 +1028,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Sop(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let proposals = sop::propose(&vault)?;
+            if cmd.json {
+                print_json(&proposals);
+                return Ok(ExitCode::SUCCESS);
+            }
             if proposals.is_empty() {
                 println!("no repeated procedures found (3+ notes must share a sequence)");
                 return Ok(ExitCode::SUCCESS);
@@ -1266,6 +1299,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             } else {
                 migrate::run(&vault, &source)?
             };
+            if cmd.json {
+                print_json(&report);
+                return Ok(ExitCode::SUCCESS);
+            }
             print!("{}", report.render());
             Ok(ExitCode::SUCCESS)
         }
@@ -1273,6 +1310,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Cluster(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let proposals = cluster::propose(&vault)?;
+            if cmd.json {
+                print_json(&proposals);
+                return Ok(ExitCode::SUCCESS);
+            }
             if proposals.is_empty() {
                 println!(
                     "no project clusters: {} or more notes within {} days must share a client domain or a person",

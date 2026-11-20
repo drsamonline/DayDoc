@@ -6,6 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::Serialize;
+
 use crate::error::Result;
 use crate::ids;
 use crate::note::Note;
@@ -17,7 +19,7 @@ pub const MIN_SUPPORT: usize = 3;
 /// Minimum steps a note needs to count as a procedure.
 pub const MIN_STEPS: usize = 3;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SopProposal {
     pub title: String,
     pub notes: Vec<String>,

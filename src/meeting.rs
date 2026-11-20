@@ -7,6 +7,8 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
+use serde::Serialize;
+
 use crate::classify::decision_score;
 use crate::error::Result;
 use crate::ids;
@@ -16,7 +18,7 @@ use crate::types::DecisionStatus;
 use crate::vault::Vault;
 
 /// A decision-shaped sentence, ready to be approved as a `DR-NNNN`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Candidate {
     pub sentence: String,
     pub title: String,

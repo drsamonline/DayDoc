@@ -6,6 +6,8 @@
 
 use std::collections::BTreeMap;
 
+use serde::Serialize;
+
 use crate::error::Result;
 use crate::ids;
 use crate::note::Note;
@@ -29,7 +31,7 @@ const NOISE_DOMAINS: [&str; 10] = [
     "notion.so",
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClusterProposal {
     pub name: String,
     pub notes: Vec<String>,

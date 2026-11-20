@@ -99,7 +99,9 @@ History is never edited.
   `DAYDOC_BACKUP_KEY` overrides both. Values are never printed.
 - **Identity guard.** Change a note's `id` and the file is a new note: the old
   id stays in the index and a warning lands in `_meta/warnings/`.
-- **`--json` on `decisions`, `search`, `stale`, `status` and `lint`.**
+- **`--json` everywhere it helps.** `decisions`, `search`, `ask`, `stale`,
+  `status`, `lint`, `meeting`, `import`, `sop`, `cluster`, `handover`, `wrap`,
+  `digest` and `config show`.
 - **A watcher for external edits.** Edit the vault in VS Code or Obsidian and
   `daydoc watch` reindexes on a debounce and commits on a timer; our own
   bookkeeping and `.git` never re-trigger it.
@@ -199,9 +201,10 @@ the ledger as cards, search, stale notes with a re-verify button, and vault
 statistics. It is a view over the same library as the CLI, so nothing exists in
 the window that is not in the vault.
 
-The window bundles Latin (egui's default) plus Lohit Devanagari and Lohit
-Gujarati (SIL OFL 1.1, `assets/fonts/`), so notes written in those scripts render
-rather than showing boxes. Other Indic scripts need their font added the same way.
+The window bundles Latin (egui's default) plus ten Lohit scripts — Devanagari,
+Gujarati, Bengali, Assamese, Gurmukhi, Odia, Tamil, Telugu, Kannada and
+Malayalam (SIL OFL 1.1, `assets/fonts/`, 1.2 MB), so notes written in those
+scripts render rather than showing boxes.
 
 Global shortcuts: `Ctrl+Shift+Space` jumps to capture, `Ctrl+Shift+K` to search.
 They are registered when the platform allows it; a machine with no hotkey service
