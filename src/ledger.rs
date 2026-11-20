@@ -387,8 +387,12 @@ pub fn status_of(note: &Note) -> DecisionStatus {
 
 /// Count the notes that cite each decision, in one pass over the vault.
 pub fn citation_counts(vault: &Vault) -> Result<std::collections::BTreeMap<String, usize>> {
+    Ok(citation_counts_from(&vault.scan()?.notes))
+}
+
+fn citation_counts_from(notes: &[Note]) -> std::collections::BTreeMap<String, usize> {
     let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    for note in vault.scan()?.notes {
+    for note in notes {
         if note.note_type() == NoteType::Decision {
             continue;
         }
@@ -408,7 +412,7 @@ pub fn citation_counts(vault: &Vault) -> Result<std::collections::BTreeMap<Strin
             *counts.entry(id).or_insert(0) += 1;
         }
     }
-    Ok(counts)
+    counts
 }
 
 /// Build a card for a decision note.
@@ -428,13 +432,26 @@ pub fn card(note: &Note, citations: &std::collections::BTreeMap<String, usize>) 
     }
 }
 
-/// Cards for the whole ledger.
+/// Cards for the whole ledger. One scan, not two.
 pub fn cards(vault: &Vault) -> Result<Vec<DecisionCard>> {
-    let citations = citation_counts(vault)?;
-    Ok(all(vault)?
+    Ok(cards_from(&vault.scan()?.notes))
+}
+
+/// Cards from notes that have already been read — for callers that hold a scan.
+pub fn cards_from(notes: &[Note]) -> Vec<DecisionCard> {
+    let citations = citation_counts_from(notes);
+    let mut decisions: Vec<&Note> = notes
         .iter()
-        .map(|n| card(n, &citations))
-        .collect::<Vec<_>>())
+        .filter(|note| note.note_type() == NoteType::Decision)
+        .collect();
+    decisions.sort_by_key(|note| {
+        note.frontmatter
+            .decision_id
+            .as_deref()
+            .and_then(ids::parse_decision_id)
+            .unwrap_or(u64::MAX)
+    });
+    decisions.iter().map(|note| card(note, &citations)).collect()
 }
 
 #[cfg(test)]
@@ -551,6 +568,18 @@ mod tests {
         assert_eq!(cards.len(), 1);
         assert_eq!(cards[0].cited_by, 1);
         assert!(cards[0].render().contains("DR-0001"));
+    }
+
+    #[test]
+    fn cards_from_a_scan_match_cards_from_the_vault() {
+        let vault = temp_vault();
+        seed(&vault, "Use Okta for SSO");
+        let notes = vault.scan().expect("scan").notes;
+        let from_scan = cards_from(&notes);
+        let from_vault = cards(&vault).expect("cards");
+        assert_eq!(from_scan.len(), from_vault.len());
+        assert_eq!(from_scan[0].decision_id, from_vault[0].decision_id);
+        assert_eq!(from_scan[0].cited_by, from_vault[0].cited_by);
     }
 
     #[test]

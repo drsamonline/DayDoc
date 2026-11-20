@@ -67,27 +67,45 @@ pub fn suggest_for<E: Embedder>(
 ) -> Result<Vec<Suggestion>> {
     let note = vault.load(note_rel)?;
     let notes = vault.scan()?.notes;
-    let target = embedder.embed(&note.search_text());
+    let vectors: Vec<(String, Vec<f32>)> = notes
+        .iter()
+        .map(|other| (other.rel_path.clone(), embedder.embed(&other.search_text())))
+        .collect();
+    Ok(suggest_from(&note, &notes, &vectors, limit, min_score))
+}
+
+/// The comparison itself, with vectors already computed.
+fn suggest_from(
+    note: &Note,
+    notes: &[Note],
+    vectors: &[(String, Vec<f32>)],
+    limit: usize,
+    min_score: f32,
+) -> Vec<Suggestion> {
+    let target = vectors
+        .iter()
+        .find(|(rel, _)| rel == &note.rel_path)
+        .map(|(_, vector)| vector.clone())
+        .unwrap_or_default();
 
     let mut suggestions: Vec<Suggestion> = Vec::new();
-    for other in &notes {
+    for (index, other) in notes.iter().enumerate() {
         if other.rel_path == note.rel_path {
             continue;
         }
         if note.frontmatter.links.contains(&other.rel_path) {
             continue;
         }
-        let mut reasons = shared_entities(&note, other);
-        let score = embed::cosine(&target, &embedder.embed(&other.search_text()));
+        let mut reasons = shared_entities(note, other);
+        let score = vectors
+            .get(index)
+            .map(|(_, vector)| embed::cosine(&target, vector))
+            .unwrap_or(0.0);
         if score < min_score && reasons.is_empty() {
             continue;
         }
         if reasons.is_empty() {
-            reasons.push(if embedder.is_semantic() {
-                "similar meaning".to_string()
-            } else {
-                "shared vocabulary".to_string()
-            });
+            reasons.push("shared vocabulary".to_string());
         }
         suggestions.push(Suggestion {
             rel_path: other.rel_path.clone(),
@@ -103,7 +121,7 @@ pub fn suggest_for<E: Embedder>(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     suggestions.truncate(limit.max(1));
-    Ok(suggestions)
+    suggestions
 }
 
 /// Suggestions for every note that has not been linked yet, best first.
@@ -113,17 +131,25 @@ pub fn suggest_all<E: Embedder>(
     limit: usize,
     min_score: f32,
 ) -> Result<Vec<(String, Vec<Suggestion>)>> {
+    let notes = vault.scan()?.notes;
+    // One embedding per note for the whole run: the naive version embedded every
+    // note once per comparison, which is quadratic in the vault.
+    let vectors: Vec<(String, Vec<f32>)> = notes
+        .iter()
+        .map(|note| (note.rel_path.clone(), embedder.embed(&note.search_text())))
+        .collect();
+
     let mut out: Vec<(String, Vec<Suggestion>)> = Vec::new();
-    for note in vault.scan()?.notes {
+    for note in &notes {
         if note.note_type() == crate::types::NoteType::Decision {
             continue;
         }
         if !note.frontmatter.links.is_empty() {
             continue;
         }
-        let suggestions = suggest_for(vault, embedder, &note.rel_path, limit, min_score)?;
+        let suggestions = suggest_from(note, &notes, &vectors, limit, min_score);
         if !suggestions.is_empty() {
-            out.push((note.rel_path, suggestions));
+            out.push((note.rel_path.clone(), suggestions));
         }
     }
     Ok(out)

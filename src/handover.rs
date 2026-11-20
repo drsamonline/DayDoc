@@ -178,7 +178,7 @@ pub fn build_data(vault: &Vault, from: &str, to: &str) -> Result<HandoverData> {
     }
 
     let mut decided: Vec<String> = Vec::new();
-    for card in ledger::cards(vault)? {
+    for card in ledger::cards_from(&notes) {
         let date = card.decided_at.clone().unwrap_or_default();
         if card.status == DecisionStatus::Accepted && in_range(&date, from, to) {
             decided.push(format!("{} — {}", card.decision_id, card.title));

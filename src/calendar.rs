@@ -85,8 +85,16 @@ pub fn parse(text: &str) -> Vec<Event> {
             summary = Some(value.trim().to_string());
         } else if upper.starts_with("DTSTART") {
             if let Some(value) = line.split_once(':').map(|(_, value)| value.trim()) {
-                if value.len() >= 8 && value[..8].chars().all(|c| c.is_ascii_digit()) {
-                    date = Some(format!("{}-{}-{}", &value[..4], &value[4..6], &value[6..8]));
+                // Take characters, never bytes: an .ics with non-ASCII in it must
+                // not panic the parser.
+                let digits: String = value.chars().take(8).collect();
+                if digits.len() == 8 && digits.chars().all(|c| c.is_ascii_digit()) {
+                    date = Some(format!(
+                        "{}-{}-{}",
+                        &digits[0..4],
+                        &digits[4..6],
+                        &digits[6..8]
+                    ));
                 }
             }
         }
@@ -280,6 +288,16 @@ END:VCALENDAR\r
 
         // Second time: nothing to do.
         assert_eq!(accept(&vault, &suggestion).expect("accept"), 0);
+    }
+
+    #[test]
+    fn a_non_ascii_date_does_not_panic() {
+        let events = parse("BEGIN:VEVENT\nSUMMARY:काही\nDTSTART:२०२६११२०T०९००००\nEND:VEVENT\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].date, None);
+        // A truncated value is skipped rather than guessed.
+        let events = parse("BEGIN:VEVENT\nSUMMARY:X\nDTSTART:2026\nEND:VEVENT\n");
+        assert_eq!(events[0].date, None);
     }
 
     #[test]

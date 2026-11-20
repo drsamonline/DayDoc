@@ -112,7 +112,7 @@ pub fn compute(vault: &Vault) -> Result<Stats> {
     }
 
     let mut decisions_by_status: BTreeMap<String, usize> = BTreeMap::new();
-    let cards = ledger::cards(vault)?;
+    let cards = ledger::cards_from(&notes);
     for card in &cards {
         *decisions_by_status
             .entry(card.status.as_str().to_string())

@@ -53,6 +53,23 @@ Worth recording, because a review that only lists defects is not a review.
 - **The HTML export escapes.** A test writes `<script>alert(1)</script>` into a
   note and asserts the export contains `&lt;script&gt;` and no `<script>` tag.
 
+## Second pass — 2026-11-20, after the calendar, mobile, embedding and linking work
+
+Five modules arrived after the first pass. Reviewed the same way.
+
+| # | Severity | Finding | Evidence | Status |
+|---|---|---|---|---|
+| 15 | High | `calendar::parse` sliced the `DTSTART` value by byte index (`&value[..4]`), so an `.ics` containing non-ASCII in a date — a Devanagari or fullwidth date, a malformed file — would panic the parser. | `src/calendar.rs` — `DTSTART` branch | **Fixed** — takes characters, checks they are all ASCII digits, skips the value otherwise; a test parses a Devanagari date and a truncated one |
+| 16 | Medium | `link::suggest_all` embedded every note once *per comparison*, which is quadratic in the vault: a thousand notes meant a million hash passes. | `src/link.rs` — `suggest_for` called per note | **Fixed** — vectors are computed once per run and passed into the comparison |
+| 17 | Medium | `ledger::cards` scanned the vault twice (citations, then the ledger), and `stats` and `handover` added their own scans on top. | `src/ledger.rs` — `cards()` | **Fixed** — `cards_from(&notes)` reuses the caller's scan; `stats` and `handover` now pass theirs |
+| 18 | Low | The mobile capture endpoint answers 500 when the vault refuses a write (read-only vault), which reads as a server fault rather than a policy. | `src/mobile.rs` — `capture_handler` | **Open** — should be 403 with the reason |
+| 19 | Low | The mobile token is compared in constant time but nothing rate-limits attempts, so a LAN attacker can guess. | `src/mobile.rs` | **Accepted** — "no rate limiter" is a stated design choice; the token is 32 bytes of randomness |
+
+What held up in the new code: the read endpoints require a *different* token from
+capture and match paths against the vault listing, so `../escape.md` is a 404;
+the embedding store round-trips exactly; `link::accept` refuses a self-link and is
+idempotent; the calendar never writes to the `.ics`.
+
 ## Verdict
 
 **Ship the core; do not call it 1.0 yet.** The five fixed findings were the ones
