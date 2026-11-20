@@ -127,15 +127,18 @@ fn a_reader_never_sees_a_half_written_note() {
         let barrier = Arc::clone(&barrier);
         thread::spawn(move || {
             barrier.wait();
+            // Every complete payload this writer can produce.
+            let expected: Vec<String> = (0..20).map(|round| payload(1, round)).collect();
             let mut reads = 0usize;
             while writing.load(Ordering::Relaxed) || reads < 5 {
                 if let Ok(text) = vault.read("inbox/hot.md") {
                     reads += 1;
+                    // The only correct outcome: what was read is exactly one of
+                    // the payloads, never a mixture and never a fragment.
                     assert!(
-                        text.starts_with("---\nid: 01") && text.trim_end().ends_with("-1-"),
+                        expected.iter().any(|payload| payload == &text),
                         "torn read:\n{text}"
                     );
-                    assert!(text.contains("start-1-"), "torn read:\n{text}");
                 }
             }
             reads

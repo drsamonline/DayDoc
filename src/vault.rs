@@ -460,9 +460,7 @@ impl Vault {
             return Ok(warnings);
         }
         if self.is_read_only() {
-            warnings.push(
-                "read-only vault: staged writes were not replayed".to_string(),
-            );
+            warnings.push("read-only vault: staged writes were not replayed".to_string());
             return Ok(warnings);
         }
         let mut entries: Vec<PathBuf> = Vec::new();
