@@ -18,69 +18,75 @@ fn sample(value: &str) -> Frontmatter {
     fm
 }
 
-const CORPUS: &[&str] = &[
-    "plain",
-    "true",
-    "false",
-    "yes",
-    "no",
-    "on",
-    "off",
-    "null",
-    "Null",
-    "~",
-    "123",
-    "1.5",
-    "-1",
-    "0x1f",
-    "1e9",
-    "2026-11-20",
-    "12:30",
-    "- leading dash",
-    "-",
-    "--",
-    "?",
-    "?question",
-    "!",
-    "!bang",
-    "*star",
-    "&amp",
-    "%pct",
-    "|pipe",
-    ">gt",
-    "'single'",
-    "\"double\"",
-    "has: colon",
-    "has # hash",
-    "#starts-with-hash",
-    "@at",
-    "`backtick`",
-    "{brace}",
-    "[bracket]",
-    "a,b",
-    "trailing space ",
-    " leading space",
-    "two  spaces",
-    "tab\there",
-    "newline\nbreak",
-    "carriage\rreturn",
-    "ünïcode",
-    "मराठी निर्णय",
-    "हिन्दी",
-    "ગુજરાતી",
-    "தமிழ்",
-    "🎯 emoji",
-    "back\\slash",
-    "",
-    " ",
-    "a".repeat(300).as_str(),
-];
+fn corpus() -> Vec<String> {
+    let mut values: Vec<String> = [
+        "plain".to_string(),
+        "true".to_string(),
+        "false".to_string(),
+        "yes".to_string(),
+        "no".to_string(),
+        "on".to_string(),
+        "off".to_string(),
+        "null".to_string(),
+        "Null".to_string(),
+        "~".to_string(),
+        "123".to_string(),
+        "1.5".to_string(),
+        "-1".to_string(),
+        "0x1f".to_string(),
+        "1e9".to_string(),
+        "2026-11-20".to_string(),
+        "12:30".to_string(),
+        "- leading dash".to_string(),
+        "-".to_string(),
+        "--".to_string(),
+        "?".to_string(),
+        "?question".to_string(),
+        "!".to_string(),
+        "!bang".to_string(),
+        "*star".to_string(),
+        "&amp".to_string(),
+        "%pct".to_string(),
+        "|pipe".to_string(),
+        ">gt".to_string(),
+        "'single'".to_string(),
+        "\"double\"".to_string(),
+        "has: colon".to_string(),
+        "has # hash".to_string(),
+        "#starts-with-hash".to_string(),
+        "@at".to_string(),
+        "`backtick`".to_string(),
+        "{brace}".to_string(),
+        "[bracket]".to_string(),
+        "a,b".to_string(),
+        "trailing space ".to_string(),
+        " leading space".to_string(),
+        "two  spaces".to_string(),
+        "tab\there".to_string(),
+        "newline\nbreak".to_string(),
+        "carriage\rreturn".to_string(),
+        "ünïcode".to_string(),
+        "मराठी निर्णय".to_string(),
+        "हिन्दी".to_string(),
+        "ગુજરાતી".to_string(),
+        "தமிழ்".to_string(),
+        "🎯 emoji".to_string(),
+        "back\\slash".to_string(),
+        "".to_string(),
+        " ".to_string(),
+    ]
+    .to_vec();
+    // A value long enough to cross any line-length assumption.
+    values.push("a".repeat(300));
+    values
+}
 
 #[test]
 fn every_awkward_value_survives_render_and_parse() {
     let mut failures: Vec<String> = Vec::new();
 
-    for value in CORPUS {
+    let corpus = corpus();
+    for value in &corpus {
         let fm = sample(value);
         let rendered = fm.render();
         let parsed = match Frontmatter::parse(&rendered) {
@@ -120,7 +126,7 @@ fn every_awkward_value_survives_render_and_parse() {
         failures.is_empty(),
         "{} of {} values did not survive a round trip:\n\n{}",
         failures.len(),
-        CORPUS.len(),
+        corpus.len(),
         failures.join("\n---\n")
     );
 }
@@ -128,7 +134,7 @@ fn every_awkward_value_survives_render_and_parse() {
 #[test]
 fn a_rendered_frontmatter_is_stable_when_rendered_again() {
     // render -> parse -> render must be identical, or every save rewrites the file.
-    for value in CORPUS {
+    for value in &corpus() {
         let first = sample(value).render();
         let parsed = Frontmatter::parse(&first).expect("parse");
         let second = parsed.render();
