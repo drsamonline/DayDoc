@@ -56,6 +56,11 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 5. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.
 
+## Before 1.0
+
+See `docs/AUDIT.md`: a licence, a `SECURITY.md`, a `--force` guard on `restore`,
+and one human pass over the window.
+
 ## Explicitly out of scope
 
 macOS, team accounts, a hosted service, telemetry, WASM plugins, multi-instance

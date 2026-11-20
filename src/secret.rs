@@ -110,8 +110,7 @@ impl KeyStore for FileStore {
         }
         std::fs::create_dir_all(&self.dir).map_err(|e| DayDocError::io(&self.dir, e))?;
         let path = self.path(name);
-        std::fs::write(&path, value).map_err(|e| DayDocError::io(&path, e))?;
-        restrict(&path)?;
+        write_private(&path, value)?;
         Ok(())
     }
 
@@ -123,6 +122,32 @@ impl KeyStore for FileStore {
             Err(err) => Err(DayDocError::io(&path, err)),
         }
     }
+}
+
+/// Create the key file with `0600` from the first byte. Writing first and
+/// chmod-ing after leaves a window where the key is readable by anyone the umask
+/// allows, which is exactly the window an audit should not find.
+fn write_private(path: &Path, value: &str) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|e| DayDocError::io(path, e))?;
+        file.write_all(value.as_bytes())
+            .map_err(|e| DayDocError::io(path, e))?;
+        file.sync_all().map_err(|e| DayDocError::io(path, e))?;
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, value).map_err(|e| DayDocError::io(path, e))?;
+    }
+    restrict(path)
 }
 
 fn restrict(path: &Path) -> Result<()> {
@@ -308,6 +333,21 @@ mod tests {
         assert!(super::location(&vault, BACKUP).is_some());
         assert!(clear(&vault, BACKUP).expect("clear"));
         assert!(resolve(&vault, BACKUP).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_key_file_that_already_existed_is_tightened() {
+        use std::os::unix::fs::PermissionsExt;
+        let vault = temp_vault();
+        let dir = vault.state_dir().join("keys");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(LLM);
+        std::fs::write(&path, "old").expect("write loose file");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("loosen");
+        FileStore::for_vault(&vault).set(LLM, "new").expect("set");
+        let mode = std::fs::metadata(&path).expect("metadata").permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[cfg(unix)]

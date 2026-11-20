@@ -214,13 +214,35 @@ pub fn write_wrap(vault: &Vault, date: &str) -> Result<String> {
     let header = format!("# End of day — {date}");
     let section = wrap.replacen(&header, "", 1).trim().to_string();
 
+    // Replace the wrap section only. Anything the user wrote after the next
+    // heading is theirs and must survive.
     let mut body = note.body.clone();
-    if let Some(pos) = body.find("## End of day") {
-        body.truncate(pos);
+    const HEADING: &str = "## End of day";
+    match body.find(HEADING) {
+        Some(start) => {
+            let after = start + HEADING.len();
+            let tail = body[after..]
+                .find("\n## ")
+                .map(|offset| body[after + offset..].to_string())
+                .unwrap_or_default();
+            body.truncate(start);
+            body.push_str(HEADING);
+            body.push_str("\n\n");
+            body.push_str(&section);
+            body.push('\n');
+            body.push_str(&tail);
+        }
+        None => {
+            if !body.ends_with('\n') {
+                body.push('\n');
+            }
+            body.push('\n');
+            body.push_str(HEADING);
+            body.push_str("\n\n");
+            body.push_str(&section);
+            body.push('\n');
+        }
     }
-    body.push_str("## End of day\n\n");
-    body.push_str(&section);
-    body.push('\n');
     note.body = body;
     note.frontmatter.updated = Some(now_iso());
     vault.save(&note)?;
@@ -456,6 +478,27 @@ mod tests {
         assert!(!wrap_written(&vault, &date));
         write_wrap(&vault, &date).expect("wrap");
         assert!(wrap_written(&vault, &date));
+    }
+
+    #[test]
+    fn writing_a_wrap_keeps_sections_that_come_after_it() {
+        let vault = temp_vault();
+        let date = today();
+        let mut note = ensure_daily(&vault, &date).expect("daily");
+        note.body.push_str("\n## Notes for tomorrow\n\ncall Priya\n");
+        vault.save(&note).expect("save");
+
+        write_wrap(&vault, &date).expect("wrap");
+        let reloaded = vault.load(&daily_rel(&date)).expect("reload");
+        assert!(reloaded.body.contains("## End of day"));
+        assert!(reloaded.body.contains("## Notes for tomorrow"), "{}", reloaded.body);
+        assert!(reloaded.body.contains("call Priya"));
+
+        // Writing twice replaces the wrap, it does not stack copies.
+        write_wrap(&vault, &date).expect("wrap again");
+        let reloaded = vault.load(&daily_rel(&date)).expect("reload");
+        assert_eq!(reloaded.body.matches("## End of day").count(), 1);
+        assert!(reloaded.body.contains("call Priya"));
     }
 
     #[test]

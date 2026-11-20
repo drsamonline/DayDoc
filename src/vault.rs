@@ -267,7 +267,10 @@ impl Vault {
             return;
         }
         let stem = ids::slug(rel.rsplit('/').next().unwrap_or(rel), 60);
-        let dest = format!("{META}/broken/{stem}-{}.md", ids::new_ulid());
+        // Named by content, not by time: scanning the same broken note twice must
+        // not leave two copies behind.
+        let digest = blake3::hash(raw.as_bytes()).to_hex().to_string();
+        let dest = format!("{META}/broken/{stem}-{}.md", &digest[..8]);
         let _ = self.write(&dest, raw);
         let _ = self.audit("frontmatter-broken", rel, "quarantined to _meta/broken/");
     }
@@ -750,6 +753,22 @@ mod tests {
         let broken_dir = vault.root().join("_meta/broken");
         let count = fs::read_dir(&broken_dir).map(|d| d.count()).unwrap_or(0);
         assert!(count >= 1);
+    }
+
+    #[test]
+    fn a_broken_note_is_quarantined_once_not_once_per_scan() {
+        let vault = temp_vault();
+        vault
+            .write("inbox/broken.md", "---\nid: [unclosed\n---\nbody\n")
+            .expect("write");
+        for _ in 0..3 {
+            let _ = vault.load("inbox/broken.md");
+            let _ = vault.scan();
+        }
+        let count = fs::read_dir(vault.root().join("_meta/broken"))
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(count, 1, "quarantine copies accumulated");
     }
 
     #[test]

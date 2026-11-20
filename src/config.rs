@@ -148,6 +148,13 @@ impl Config {
                     .to_string(),
             ));
         }
+        if self.trash_retention_days < 1 {
+            return Err(DayDocError::Config(
+                "trash_retention_days must be at least 1; 0 would delete the trash \
+                 as soon as it is written"
+                    .to_string(),
+            ));
+        }
         if self.backup_encrypt && self.backup_enabled == false {
             return Err(DayDocError::Config(
                 "backup_encrypt requires backup_enabled".to_string(),
@@ -242,7 +249,7 @@ impl Config {
                 Ok(self.weekly_digest.to_string())
             }
             "trash_retention_days" => {
-                self.trash_retention_days = integer(value)?.max(0);
+                self.trash_retention_days = integer(value)?.max(1);
                 Ok(self.trash_retention_days.to_string())
             }
             "backup_enabled" => {
@@ -337,6 +344,14 @@ mod tests {
         assert!(c.set_key("weekly_digest", "maybe").is_err());
         assert!(c.set_key("nonsense", "1").is_err());
         assert!(c.set_key("telemetry", "true").is_err());
+    }
+
+    #[test]
+    fn the_trash_retention_has_a_floor() {
+        let mut c = Config::default();
+        assert_eq!(c.set_key("trash_retention_days", "0").expect("set"), "1");
+        c.trash_retention_days = 0;
+        assert!(c.validate().is_err());
     }
 
     #[test]

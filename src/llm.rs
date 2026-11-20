@@ -263,15 +263,35 @@ pub fn parse_response(provider: &str, value: &Value) -> Result<String> {
         .ok_or_else(|| DayDocError::Llm(format!("{provider} response had no text")))
 }
 
-/// The key for this vault: the secret store first, then the usual provider
-/// variables. It never enters the config file and never appears in a log, a
-/// preview or a request body.
-pub fn api_key(vault: &Vault) -> Option<String> {
-    crate::secret::resolve(vault, crate::secret::LLM).or_else(api_key_from_env)
+/// The key for this vault: the secret store first, then the environment
+/// variable that belongs to *this* provider.
+///
+/// Provider matching matters: an `ANTHROPIC_API_KEY` in the environment must
+/// never be sent to `api.openai.com` just because it was found first.
+pub fn api_key(vault: &Vault, provider: &str) -> Option<String> {
+    if let Some(key) = crate::secret::resolve(vault, crate::secret::LLM) {
+        return Some(key);
+    }
+    api_key_from_env_for(provider)
 }
 
-pub fn api_key_from_env() -> Option<String> {
-    for name in ["DAYDOC_LLM_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+/// The environment variables that can hold a key for `provider`, in order.
+pub fn env_names_for(provider: &str) -> &'static [&'static str] {
+    match provider {
+        "anthropic" => &["ANTHROPIC_API_KEY"],
+        "openai" | "groq" | "openrouter" | "local" => &["OPENAI_API_KEY"],
+        _ => &["OPENAI_API_KEY"],
+    }
+}
+
+pub fn api_key_from_env_for(provider: &str) -> Option<String> {
+    if let Ok(value) = std::env::var("DAYDOC_LLM_KEY") {
+        let trimmed = value.trim().to_string();
+        if !trimmed.is_empty() {
+            return Some(trimmed);
+        }
+    }
+    for name in env_names_for(provider) {
         if let Ok(value) = std::env::var(name) {
             let trimmed = value.trim().to_string();
             if !trimmed.is_empty() {
@@ -316,7 +336,7 @@ pub fn ask_with(
                 .to_string(),
         ));
     }
-    let key = api_key(vault).ok_or_else(|| {
+    let key = api_key(vault, &settings.provider).ok_or_else(|| {
         DayDocError::Llm(
             "no API key found: `daydoc key set llm` (reads stdin) or DAYDOC_LLM_KEY".to_string(),
         )
@@ -464,6 +484,15 @@ mod tests {
         let answer = ask_with(&vault, "what did we decide about okta", 3, &transport)
             .expect("answer");
         assert_eq!(answer, "Okta, DR-0001.");
+    }
+
+    #[test]
+    fn an_anthropic_key_is_never_offered_to_openai() {
+        assert_eq!(env_names_for("anthropic"), &["ANTHROPIC_API_KEY"]);
+        assert_eq!(env_names_for("openai"), &["OPENAI_API_KEY"]);
+        assert_eq!(env_names_for("groq"), &["OPENAI_API_KEY"]);
+        assert!(!env_names_for("openai").contains(&"ANTHROPIC_API_KEY"));
+        assert!(!env_names_for("anthropic").contains(&"OPENAI_API_KEY"));
     }
 
     #[test]
