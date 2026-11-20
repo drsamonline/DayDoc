@@ -212,6 +212,14 @@ impl KeyStore for MemoryStore {
     }
 }
 
+/// Keychain entries are machine-wide, so they are namespaced by vault: two
+/// vaults never share a key, and a test vault never inherits another's.
+fn scoped_name(vault: &Vault, name: &str) -> String {
+    let root = vault.root().to_string_lossy().to_string();
+    let digest = blake3::hash(root.as_bytes()).to_hex().to_string();
+    format!("{name}@{}", &digest[..8])
+}
+
 /// The key for `name`: environment, then keychain, then the state directory.
 pub fn resolve(vault: &Vault, name: &str) -> Option<String> {
     if let Some(value) = EnvStore.get(name) {
@@ -219,7 +227,7 @@ pub fn resolve(vault: &Vault, name: &str) -> Option<String> {
     }
     #[cfg(feature = "keychain")]
     {
-        if let Some(value) = KeychainStore.get(name) {
+        if let Some(value) = KeychainStore.get(&scoped_name(vault, name)) {
             return Some(value);
         }
     }
@@ -234,7 +242,7 @@ pub fn set(vault: &Vault, name: &str, value: &str) -> Result<KeyLocation> {
     }
     #[cfg(feature = "keychain")]
     {
-        if KeychainStore.set(name, value).is_ok() {
+        if KeychainStore.set(&scoped_name(vault, name), value).is_ok() {
             return Ok(KeyLocation::Keychain);
         }
     }
@@ -247,7 +255,7 @@ pub fn clear(vault: &Vault, name: &str) -> Result<bool> {
     let mut removed = false;
     #[cfg(feature = "keychain")]
     {
-        removed |= KeychainStore.clear(name).unwrap_or(false);
+        removed |= KeychainStore.clear(&scoped_name(vault, name)).unwrap_or(false);
     }
     removed |= FileStore::for_vault(vault).clear(name)?;
     Ok(removed)
@@ -264,7 +272,7 @@ pub fn location(vault: &Vault, name: &str) -> Option<&'static str> {
     }
     #[cfg(feature = "keychain")]
     {
-        if KeychainStore.get(name).is_some() {
+        if KeychainStore.get(&scoped_name(vault, name)).is_some() {
             return Some("the OS keychain");
         }
     }
@@ -312,6 +320,14 @@ mod tests {
         let path = vault.state_dir().join("keys").join(LLM);
         let mode = std::fs::metadata(&path).expect("metadata").permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "mode was {:o}", mode & 0o777);
+    }
+
+    #[test]
+    fn keychain_entries_are_namespaced_by_vault() {
+        let first = temp_vault();
+        let second = temp_vault();
+        assert_ne!(scoped_name(&first, BACKUP), scoped_name(&second, BACKUP));
+        assert!(scoped_name(&first, BACKUP).starts_with("backup@"));
     }
 
     #[test]

@@ -360,6 +360,8 @@ mod tests {
         let mut vault = temp_vault();
         vault.config_mut().backup_encrypt = true;
         let dir = vault.state_dir().join("backups");
+        // A fresh temp vault has no key in any store: file, keychain or env.
+        assert!(secret::resolve(&vault, secret::BACKUP).is_none());
         let err = run(&vault, &dir).expect_err("no key, no backup");
         assert!(err.to_string().contains("backup key"));
         assert!(!dir.exists() || existing(&dir).is_empty());
