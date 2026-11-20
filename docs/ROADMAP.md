@@ -47,9 +47,8 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
    shell, and write actions behind an Approve card.
 3. **Shell follow-ups.** A tray icon (`tray-icon` needs Rust 1.90 and
-   libappindicator headers on Linux), `Ctrl+Shift+M` for the morning plan, a
-   native Monday-digest notification, and the floating capture overlay that sits
-   above other windows.
+   libappindicator headers on Linux), a native Monday-digest notification, and the
+   floating capture overlay that sits above other windows.
 3. **Keychain edge cases.** The keychain store exists; what is left is a
    Windows credential-manager test pass and a locked-session error message.
 4. **Mobile follow-ups.** Capture and read are both in place behind separate

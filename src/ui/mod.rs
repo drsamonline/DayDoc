@@ -19,6 +19,7 @@ use crate::Vault;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
     Capture,
+    Plan,
     Decisions,
     Search,
     Stale,
@@ -26,8 +27,9 @@ enum View {
 }
 
 impl View {
-    const ALL: [View; 5] = [
+    const ALL: [View; 6] = [
         View::Capture,
+        View::Plan,
         View::Decisions,
         View::Search,
         View::Stale,
@@ -37,6 +39,7 @@ impl View {
     fn label(self) -> &'static str {
         match self {
             View::Capture => "Capture",
+            View::Plan => "Plan",
             View::Decisions => "Decisions",
             View::Search => "Search",
             View::Stale => "Stale",
@@ -106,8 +109,8 @@ fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// The two capture shortcuts: one to write, one to look something up.
-fn hotkeys() -> [(HotKey, View); 2] {
+/// The shortcuts: write, look something up, plan the day.
+fn hotkeys() -> [(HotKey, View); 3] {
     [
         (
             HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space),
@@ -116,6 +119,10 @@ fn hotkeys() -> [(HotKey, View); 2] {
         (
             HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK),
             View::Search,
+        ),
+        (
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyM),
+            View::Plan,
         ),
     ]
 }
@@ -133,6 +140,7 @@ pub struct App {
     stats: Option<Stats>,
     status: String,
     offer_wrap: bool,
+    plan: String,
 }
 
 impl std::fmt::Debug for App {
@@ -159,6 +167,7 @@ impl App {
             stats: None,
             status: String::new(),
             offer_wrap: false,
+            plan: String::new(),
         };
         app.refresh();
         let date = crate::vault::today();
@@ -227,6 +236,7 @@ impl App {
                 Ok(stats) => self.stats = Some(stats),
                 Err(err) => self.status = format!("stats failed: {err}"),
             },
+            View::Plan => self.plan = crate::daily::plan_text(&self.vault, &crate::vault::today()),
             View::Capture => {}
         }
     }
@@ -324,6 +334,24 @@ impl App {
         }
         if dismiss {
             self.offer_wrap = false;
+        }
+    }
+
+    fn plan_view(&mut self, ui: &mut egui::Ui) {
+        let date = crate::vault::today();
+        ui.heading("Plan");
+        ui.label(format!("What are you working on today? — {date}"));
+        ui.add(
+            egui::TextEdit::multiline(&mut self.plan)
+                .desired_rows(8)
+                .desired_width(f32::INFINITY)
+                .hint_text("one thing per line"),
+        );
+        if ui.button("Save plan").clicked() {
+            match crate::daily::set_plan(&self.vault, &date, &self.plan) {
+                Ok(note) => self.status = format!("plan saved in {}", note.rel_path),
+                Err(err) => self.status = format!("could not save the plan: {err}"),
+            }
         }
     }
 
@@ -518,6 +546,7 @@ impl App {
 
         egui::CentralPanel::default().show(ctx, |ui| match self.view {
             View::Capture => self.capture_view(ui),
+            View::Plan => self.plan_view(ui),
             View::Decisions => self.decisions_view(ui),
             View::Search => self.search_view(ui),
             View::Stale => self.stale_view(ui),
@@ -584,12 +613,38 @@ mod tests {
     }
 
     #[test]
-    fn the_shortcuts_are_ctrl_shift_space_and_ctrl_shift_k() {
-        let [(space, space_view), (key_k, k_view)] = hotkeys();
-        assert_eq!(space.id(), HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space).id());
-        assert_eq!(key_k.id(), HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK).id());
-        assert_eq!(space_view, View::Capture);
-        assert_eq!(k_view, View::Search);
+    fn the_shortcuts_are_space_k_and_m() {
+        let keys = hotkeys();
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            keys[0].0.id(),
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space).id()
+        );
+        assert_eq!(keys[0].1, View::Capture);
+        assert_eq!(
+            keys[1].0.id(),
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyK).id()
+        );
+        assert_eq!(keys[1].1, View::Search);
+        assert_eq!(
+            keys[2].0.id(),
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyM).id()
+        );
+        assert_eq!(keys[2].1, View::Plan);
+    }
+
+    #[test]
+    fn the_plan_view_saves_the_plan_into_the_daily_note() {
+        let vault = temp_vault();
+        let mut app = App::new(vault.clone());
+        app.view = View::Plan;
+        app.refresh();
+        app.plan = "finish the SSO decision".to_string();
+        assert!(render_frames(&mut app, 2) > 0);
+
+        let date = crate::vault::today();
+        crate::daily::set_plan(&vault, &date, &app.plan).expect("save");
+        assert!(crate::daily::plan_text(&vault, &date).contains("finish the SSO decision"));
     }
 
     #[test]

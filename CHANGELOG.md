@@ -5,7 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- The morning plan: `Ctrl+Shift+M` opens a Plan view, and what you write goes into
+  the `## Plan` section of today's daily note.
 
 ## [0.2.0] — 2026-11-20
 

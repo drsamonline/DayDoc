@@ -58,6 +58,50 @@ pub fn ensure_daily(vault: &Vault, date: &str) -> Result<Note> {
     Ok(note)
 }
 
+/// Replace the `## Plan` section of a day's note. The rest of the note is
+/// untouched, including anything written after the plan.
+pub fn set_plan(vault: &Vault, date: &str, text: &str) -> Result<Note> {
+    let mut note = ensure_daily(vault, date)?;
+    const MARKER: &str = "## Plan";
+    let replacement = format!("{MARKER}\n\n{}\n", text.trim());
+    let body = note.body.clone();
+
+    note.body = match body.find(MARKER) {
+        Some(start) => {
+            let after = start + MARKER.len();
+            let end = body[after..]
+                .find("\n## ")
+                .map(|offset| after + offset)
+                .unwrap_or(body.len());
+            let mut out = String::with_capacity(body.len());
+            out.push_str(&body[..start]);
+            out.push_str(&replacement);
+            out.push_str(&body[end..]);
+            out
+        }
+        None => {
+            let mut out = body;
+            if !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push('\n');
+            out.push_str(&replacement);
+            out
+        }
+    };
+    note.frontmatter.updated = Some(now_iso());
+    vault.save(&note)?;
+    Ok(note)
+}
+
+/// The plan as it stands, or an empty string.
+pub fn plan_text(vault: &Vault, date: &str) -> String {
+    match vault.load(&daily_rel(date)) {
+        Ok(note) => note.section("plan"),
+        Err(_) => String::new(),
+    }
+}
+
 fn date_of(note: &Note) -> String {
     for candidate in [
         note.frontmatter.created.as_deref(),
@@ -505,6 +549,24 @@ mod tests {
         let reloaded = vault.load(&daily_rel(&date)).expect("reload");
         assert_eq!(reloaded.body.matches("## End of day").count(), 1);
         assert!(reloaded.body.contains("call Priya"));
+    }
+
+    #[test]
+    fn a_plan_is_written_once_and_replaced_cleanly() {
+        let vault = temp_vault();
+        let date = today();
+        assert_eq!(plan_text(&vault, &date), "");
+
+        set_plan(&vault, &date, "finish the SSO decision\nreview the handover").expect("set");
+        let written = plan_text(&vault, &date);
+        assert!(written.contains("finish the SSO decision"), "{written}");
+
+        // Replacing keeps one section and leaves the rest of the note alone.
+        set_plan(&vault, &date, "only this").expect("set again");
+        let note = vault.load(&daily_rel(&date)).expect("load");
+        assert_eq!(note.body.matches("## Plan").count(), 1);
+        assert!(note.body.contains("## Captures"), "the other sections went missing");
+        assert_eq!(plan_text(&vault, &date), "only this");
     }
 
     #[test]
