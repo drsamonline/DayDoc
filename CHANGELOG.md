@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 - The morning plan: `Ctrl+Shift+M` opens a Plan view, and what you write goes into
   the `## Plan` section of today's daily note.
 
+## [0.2.1] — 2026-11-20
+
+### Fixed
+
+- **The 0.2.0 Linux binary did not run.** It was built on the newest runner, so it
+  required `GLIBC_2.43` and refused to start on Debian 12 (2.36), Ubuntu 22.04
+  (2.35) and anything else older than the runner. Found by downloading the
+  published archive and running it. The Linux build is now pinned to
+  `ubuntu-22.04`, a static `x86_64-unknown-linux-musl` archive is published
+  alongside it, and the `.deb` is built on the same floor.
+
 ## [0.2.0] — 2026-11-20
 
 Everything since 0.1.0: linking, the calendar signal, the phone surface, and a
@@ -128,5 +139,6 @@ with no model, no account and no network.
   encryption by default, the `0600` key file protects against other accounts and
   not against you, and the optional model sees what you send it.
 
+[0.2.1]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.1
 [0.2.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.0
 [0.1.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.1.0
