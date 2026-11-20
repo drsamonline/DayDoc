@@ -605,6 +605,9 @@ fn capture_preview_honours_a_forced_kind() {
     let out = sandbox.ok(&["capture", "hmm", "--preview", "--kind", "task"]);
     assert_contains(&out, "would store as task");
     assert_contains(&out, "classifier guessed");
-    // Nothing was written.
-    assert!(!sandbox.exists("tasks"));
+    // The folder exists from init; the preview must not have written a note into it.
+    let written = std::fs::read_dir(sandbox.vault().join("tasks"))
+        .map(|entries| entries.count())
+        .unwrap_or(0);
+    assert_eq!(written, 0, "preview wrote a note");
 }
