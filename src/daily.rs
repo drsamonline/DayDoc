@@ -13,6 +13,21 @@ use crate::summarize::extractive_summary;
 use crate::types::{DecisionStatus, NoteType};
 use crate::vault::{now_iso, Vault};
 
+/// Whether to offer the end-of-day wrap: after 17:00 local, and not already
+/// written for today.
+pub fn wrap_due(now: chrono::DateTime<chrono::Local>, already_written: bool) -> bool {
+    use chrono::Timelike;
+    !already_written && now.hour() >= 17
+}
+
+/// Has today's wrap been written into the daily note?
+pub fn wrap_written(vault: &Vault, date: &str) -> bool {
+    match vault.load(&daily_rel(date)) {
+        Ok(note) => note.section("end of day").trim().len() > 20,
+        Err(_) => false,
+    }
+}
+
 pub fn daily_rel(date: &str) -> String {
     format!("daily/{date}.md")
 }
@@ -412,6 +427,27 @@ mod tests {
         let wrap = eod_wrap(&vault, &date).expect("wrap");
         assert!(wrap.contains("DR-0001"));
         assert!(wrap.contains("send the invoice"));
+    }
+
+    #[test]
+    fn the_wrap_is_offered_after_five() {
+        use chrono::TimeZone;
+        let before = chrono::Local.with_ymd_and_hms(2026, 11, 20, 16, 59, 0).unwrap();
+        let after = chrono::Local.with_ymd_and_hms(2026, 11, 20, 17, 0, 0).unwrap();
+        assert!(!wrap_due(before, false));
+        assert!(wrap_due(after, false));
+        assert!(!wrap_due(after, true));
+    }
+
+    #[test]
+    fn a_fresh_daily_note_has_no_wrap_and_a_written_one_does() {
+        let vault = temp_vault();
+        let date = today();
+        assert!(!wrap_written(&vault, &date));
+        ensure_daily(&vault, &date).expect("daily");
+        assert!(!wrap_written(&vault, &date));
+        write_wrap(&vault, &date).expect("wrap");
+        assert!(wrap_written(&vault, &date));
     }
 
     #[test]

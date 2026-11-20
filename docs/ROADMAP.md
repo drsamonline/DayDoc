@@ -22,6 +22,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
   shapes for OpenAI-compatible, Anthropic and Gemini
 - Desktop shell: capture, decisions, search, stale, status over the library
+- End-of-day wrap offered by the shell after 17:00 local
 - Ten Indic scripts bundled (Lohit, SIL OFL 1.1)
 - `--json` on meeting, ask, import, sop and cluster, completing the surface
 - Global shortcuts: `Ctrl+Shift+Space` capture, `Ctrl+Shift+K` search
@@ -46,8 +47,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
    shell, and write actions behind an Approve card.
 3. **Shell follow-ups.** A tray icon (`tray-icon` needs Rust 1.90 and
-   libappindicator headers on Linux), `Ctrl+Shift+M` for the morning plan, and
-   the floating capture overlay that sits above other windows.
+   libappindicator headers on Linux), `Ctrl+Shift+M` for the morning plan, a
+   native Monday-digest notification, and the floating capture overlay that sits
+   above other windows.
 3. **Keychain edge cases.** The keychain store exists; what is left is a
    Windows credential-manager test pass and a locked-session error message.
 4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.

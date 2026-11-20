@@ -132,6 +132,7 @@ pub struct App {
     flags: Vec<StaleFlag>,
     stats: Option<Stats>,
     status: String,
+    offer_wrap: bool,
 }
 
 impl std::fmt::Debug for App {
@@ -157,8 +158,14 @@ impl App {
             flags: Vec::new(),
             stats: None,
             status: String::new(),
+            offer_wrap: false,
         };
         app.refresh();
+        let date = crate::vault::today();
+        app.offer_wrap = crate::daily::wrap_due(
+            chrono::Local::now(),
+            crate::daily::wrap_written(&app.vault, &date),
+        );
         app
     }
 
@@ -287,8 +294,42 @@ impl App {
         ui.label(egui::RichText::new("LLM: off unless configured").small().weak());
     }
 
+    fn wrap_banner(&mut self, ui: &mut egui::Ui) {
+        if !self.offer_wrap {
+            return;
+        }
+        let mut dismiss = false;
+        let mut write = false;
+        ui.group(|ui| {
+            ui.label(
+                egui::RichText::new("It is after 17:00. Write the end-of-day wrap?")
+                    .strong(),
+            );
+            ui.horizontal(|ui| {
+                if ui.button("Write wrap").clicked() {
+                    write = true;
+                }
+                if ui.button("Not now").clicked() {
+                    dismiss = true;
+                }
+            });
+        });
+        if write {
+            let date = crate::vault::today();
+            match crate::daily::write_wrap(&self.vault, &date) {
+                Ok(rel) => self.status = format!("wrap written into {rel}"),
+                Err(err) => self.status = format!("wrap failed: {err}"),
+            }
+            self.offer_wrap = false;
+        }
+        if dismiss {
+            self.offer_wrap = false;
+        }
+    }
+
     fn capture_view(&mut self, ui: &mut egui::Ui) {
         ui.heading("Capture");
+        self.wrap_banner(ui);
         ui.label("One box. Type, then Ctrl+Enter.");
         let response = ui.add(
             egui::TextEdit::multiline(&mut self.capture)
@@ -458,10 +499,10 @@ impl App {
     }
 }
 
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.drain_hotkeys(ctx);
-
+impl App {
+    /// One frame. Kept separate from the `eframe::App` impl so a frame can be
+    /// rendered without a window in a test.
+    pub fn draw(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("daydoc-side")
             .resizable(false)
             .default_width(190.0)
@@ -482,6 +523,13 @@ impl eframe::App for App {
             View::Stale => self.stale_view(ui),
             View::Status => self.status_view(ui),
         });
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.drain_hotkeys(ctx);
+        self.draw(ctx);
     }
 }
 
@@ -552,6 +600,54 @@ mod tests {
             // TrueType signature: 0x00010000.
             assert_eq!(&bytes[..4], &[0x00, 0x01, 0x00, 0x00], "{name} is not a TTF");
         }
+    }
+
+    fn render_frames(app: &mut App, frames: usize) -> usize {
+        let ctx = egui::Context::default();
+        install_fonts(&ctx);
+        let mut shapes = 0usize;
+        for _ in 0..frames {
+            let output = ctx.run(egui::RawInput::default(), |ctx| app.draw(ctx));
+            shapes = output.shapes.len();
+        }
+        shapes
+    }
+
+    #[test]
+    fn every_view_renders_a_frame_without_a_window() {
+        let vault = temp_vault();
+        crate::ledger::create(
+            &vault,
+            &crate::ledger::NewDecision::new("Use Okta for SSO")
+                .accepted()
+                .with_owner("alice"),
+        )
+        .expect("decision");
+        vault
+            .write(
+                "reference/old.md",
+                "---\nid: 01A\ntype: reference\ntitle: Old\nlast_verified: 2020-01-01\n---\nbody\n",
+            )
+            .expect("write");
+
+        let mut app = App::new(vault);
+        for view in View::ALL {
+            app.view = view;
+            app.refresh();
+            let shapes = render_frames(&mut app, 2);
+            assert!(shapes > 0, "{} drew nothing", view.label());
+        }
+    }
+
+    #[test]
+    fn the_capture_view_renders_with_text_and_a_preview() {
+        let vault = temp_vault();
+        let mut app = App::new(vault);
+        app.capture = "we decided to adopt okta".to_string();
+        app.classify_now();
+        let shapes = render_frames(&mut app, 2);
+        assert!(shapes > 0);
+        assert!(app.preview.is_some());
     }
 
     #[test]

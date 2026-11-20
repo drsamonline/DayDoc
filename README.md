@@ -206,6 +206,9 @@ Gujarati, Bengali, Assamese, Gurmukhi, Odia, Tamil, Telugu, Kannada and
 Malayalam (SIL OFL 1.1, `assets/fonts/`, 1.2 MB), so notes written in those
 scripts render rather than showing boxes.
 
+After 17:00 local, the capture view offers the end-of-day wrap — one button,
+written into today's daily note, and not offered again once written.
+
 Global shortcuts: `Ctrl+Shift+Space` jumps to capture, `Ctrl+Shift+K` to search.
 They are registered when the platform allows it; a machine with no hotkey service
 runs without them, and the window says so in its status line. There is no tray
