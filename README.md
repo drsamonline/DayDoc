@@ -263,6 +263,15 @@ They are registered when the platform allows it; a machine with no hotkey servic
 runs without them, and the window says so in its status line. There is no tray
 icon yet.
 
+## Speed
+
+The spec asks for a cold start under 300 ms and under 60 MB idle; neither is
+measured here, because this environment has no display and no reliable way to
+weigh a process. What is measured is the part that degrades with the vault:
+`tests/perf.rs` indexes and searches 500 notes against a budget, and fails if an
+order-of-magnitude regression creeps in. On a GitHub runner that is a couple of
+seconds for the whole test.
+
 ## Packaging
 
 `v*` tags build Linux and Windows archives plus a `.deb`. See
