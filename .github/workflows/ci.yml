@@ -32,6 +32,12 @@ jobs:
         continue-on-error: true
       - name: build
         run: cargo build --all-targets
+      - name: build the core alone
+        run: cargo build --no-default-features
+        if: matrix.os == 'ubuntu-latest'
+      - name: test the core alone
+        run: cargo test --no-default-features --lib
+        if: matrix.os == 'ubuntu-latest'
       - name: test
         run: cargo test --all-targets
       - name: release build
