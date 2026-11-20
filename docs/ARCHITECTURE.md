@@ -40,16 +40,36 @@ vault, so a synced vault never carries half-finished writes.
 | `vault` | WAL, atomic commit, path safety, scan, trash, archive, audit log, SQLite counters |
 | `frontmatter` | YAML in/out; unknown keys preserved so a round trip loses nothing |
 | `note` | Note model, `## Section` helpers, canonical decision body |
+| `types` | Note types and the decision lifecycle, including the allowed transitions |
+| `ids` | The two ID spaces: ULID for linking, `DR-NNNN` for humans, and slugs |
 | `ledger` | Counter allocation, create, supersede, revert, transitions, cards |
 | `classify` | Nine-type intent classifier: cue table + structural signals |
+| `capture` | Classify → route, or inbox with a badge |
 | `meeting` | Sentence split, cue scoring, owner NER, candidate cards, approval |
 | `sop` | Ordered trigram signatures, union-find clustering, proposals |
 | `stale` | Age by type + contradiction (superseded decision, renamed project, departed owner) |
 | `search` | Fuzzy token match with edit distance, filters, decision cards, `ask` |
+| `index` | SQLite metadata + FTS5 candidates, file-count stamp, note identity guard |
+| `embed` | The `Embedder` trait, a deterministic feature-hash embedder, cosine, vector store |
+| `link` | Auto-link suggestions from a shared entity or similarity; accept writes links |
 | `summarize` | TextRank extractive summary |
 | `handover` | Period packet: did, open, decided, who to ask, stale |
-| `capture` | Classify → route, or inbox with a badge |
-| `daily` | Daily note, EOD wrap, ISO-week digest |
+| `daily` | Daily note, EOD wrap, ISO-week digest, the 17:00 prompt |
+| `migrate` | Import an existing Markdown folder, dry-run first, symlinks skipped |
+| `cluster` | Project proposals from a shared client domain or person |
+| `attach` | Content-addressed attachments, deduplicated by hash |
+| `calendar` | Read-only `.ics` signal: event titles bias project tagging |
+| `lint` | Vault health: ids, types, citations, links, attachments; `--fix` for ids only |
+| `stats` | Vault counts, entities and date range |
+| `export` | One self-contained HTML file for a period |
+| `backup` | Dated `.tar.gz`, 7/4/6 retention, AES-256-GCM, restore with `--force` |
+| `crypto` | AES-256-GCM with a `DAYDOC1` header; wrong key and tampering fail closed |
+| `secret` | `KeyStore` trait: environment, OS keychain, `0600` file |
+| `sync` | Git commit-only through `git2`; conflict sidecars; never holds credentials |
+| `watch` | Filesystem watcher, debounce, per-path reindex, timed commit |
+| `llm` | Optional BYOK chat: retrieval, preview, provider request shapes |
+| `mobile` | Capture-only (and optionally read) HTTP surface with two tokens |
+| `ui` | The egui shell: capture, ledger, search, stale, status, Indic fonts, hotkeys |
 
 ## Counters
 

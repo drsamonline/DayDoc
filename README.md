@@ -276,6 +276,20 @@ embeddings (MiniLM / bert-tiny-NER via `rten`), auto-linking, project
 auto-clustering, attachments, git sync, mobile PWA, encrypted backup, packaging
 and self-update. See `docs/ROADMAP.md`.
 
+## Where to read next
+
+| Question | File |
+| --- | --- |
+| What can I do with it, task by task | `docs/USAGE.md` |
+| What a decision, an SOP and a task are | `docs/ONTOLOGY.md` |
+| How the write path and the modules work | `docs/ARCHITECTURE.md` |
+| What is missing, in order | `docs/ROADMAP.md` |
+| What is known to be wrong | `docs/AUDIT.md` |
+| Why a choice was made | `docs/DECISIONS.md` |
+| Packaging and releases | `docs/PACKAGING.md` |
+| What changed | `CHANGELOG.md` |
+| How to work in this repository | `AGENTS.md` |
+
 ## Layout
 
 ```
