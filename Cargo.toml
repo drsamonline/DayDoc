@@ -17,9 +17,10 @@ name = "daydoc"
 path = "src/main.rs"
 
 [features]
-default = ["git", "ui", "keychain"]
+default = ["git", "ui", "keychain", "mobile"]
 git = ["dep:git2"]
 ui = ["dep:eframe", "dep:global-hotkey"]
+mobile = ["dep:axum", "dep:tokio"]
 keychain = ["dep:keyring"]
 
 [dependencies]
@@ -27,6 +28,7 @@ anyhow = "1"
 argh = "0.1"
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+axum = { version = "0.7", default-features = false, features = ["json", "tokio", "http1"], optional = true }
 eframe = { version = "0.29", optional = true }
 global-hotkey = { version = "0.10", optional = true }
 keyring = { version = "3", default-features = false, features = ["linux-native", "windows-native"], optional = true }
@@ -42,6 +44,7 @@ serde_json = "1"
 tar = { version = "0.4", default-features = false }
 thiserror = "1"
 toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "macros"], optional = true }
 ulid = "1"
 yaml-rust2 = "0.9"
 
@@ -59,6 +62,7 @@ assets = [
 
 [dev-dependencies]
 serde_json = "1"
+tower = { version = "0.4", features = ["util"] }
 
 [profile.release]
 opt-level = "z"

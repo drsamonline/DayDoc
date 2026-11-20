@@ -178,6 +178,7 @@ config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 link        suggest links between notes, and accept one
+mobile      serve the capture-only phone page on the local network
 reindex     rebuild the search index from the vault
 watch       reindex on external edits, commit on a timer
 backup      write a dated .tar.gz (optionally encrypted) and apply retention
@@ -205,6 +206,23 @@ handles your data is in `PRIVACY.md`; what it does and does not protect is in
 These are drafts written to be checkable against the code, not legal advice. If
 you fork this for commercial use, have your own counsel review the privacy and
 security statements before you ship.
+
+## Capture from a phone
+
+`daydoc mobile` serves one page on your network: a token field, a box, a save
+button. It is capture-only — reading the vault from a phone needs a second token
+and is not implemented, so `/notes` and `/search` answer 403 with the reason. The
+page queues captures in `localStorage` and flushes them when the connection
+returns, so a lift or a basement does not lose a note.
+
+```bash
+daydoc config set mobile_enabled true
+daydoc key set mobile --generate     # prints the token once
+daydoc mobile --addr 0.0.0.0:7373
+```
+
+The token is compared in constant time and never logged. There is no TLS: run it
+on a network you trust, or behind a tunnel.
 
 ## The window
 

@@ -32,6 +32,8 @@ pub mod link;
 pub mod llm;
 pub mod meeting;
 pub mod migrate;
+#[cfg(feature = "mobile")]
+pub mod mobile;
 pub mod note;
 pub mod search;
 pub mod secret;

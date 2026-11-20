@@ -59,6 +59,7 @@ enum Sub {
     Check(CheckCmd),
     Import(ImportCmd),
     Lint(LintCmd),
+    Mobile(MobileCmd),
     Link(LinkCmd),
     Sync(SyncCmd),
     Reindex(ReindexCmd),
@@ -313,6 +314,15 @@ struct SopCmd {
     #[argh(option)]
     /// proposal number to accept, 1-based
     index: Option<usize>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "mobile")]
+/// serve the capture-only phone page on the local network
+struct MobileCmd {
+    #[argh(option)]
+    /// address to bind (default: 0.0.0.0:7373)
+    addr: Option<String>,
 }
 
 #[derive(FromArgs, Debug)]
@@ -730,11 +740,11 @@ fn advance_reference(reference: &str, by: u64) -> String {
 
 fn normalise_key_name(raw: &str) -> daydoc::Result<String> {
     let name = raw.trim().to_ascii_lowercase();
-    if matches!(name.as_str(), "backup" | "llm") {
+    if matches!(name.as_str(), "backup" | "llm" | "mobile") {
         Ok(name)
     } else {
         Err(DayDocError::Config(format!(
-            "unknown key \"{raw}\"; use backup or llm"
+            "unknown key \"{raw}\"; use backup, llm or mobile"
         )))
     }
 }
@@ -1253,6 +1263,35 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             let report = export::run(&vault, &from, &to, &out)?;
             print!("{}", report.render());
             Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Mobile(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            if !vault.config().mobile_enabled {
+                return Err(DayDocError::Config(
+                    "mobile capture is off; enable it with `daydoc config set mobile_enabled true`"
+                        .to_string(),
+                ));
+            }
+            let token = secret::resolve(&vault, secret::MOBILE).ok_or_else(|| {
+                DayDocError::Config(
+                    "no capture token; create one with `daydoc key set mobile --generate`"
+                        .to_string(),
+                )
+            })?;
+            let addr = cmd.addr.unwrap_or_else(|| "0.0.0.0:7373".to_string());
+            #[cfg(feature = "mobile")]
+            {
+                daydoc::mobile::serve(vault, &addr, token)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            #[cfg(not(feature = "mobile"))]
+            {
+                let _ = (vault, token, addr);
+                Err(DayDocError::Config(
+                    "this build has no mobile surface (feature \"mobile\" is off)".to_string(),
+                ))
+            }
         }
 
         Sub::Link(cmd) => {

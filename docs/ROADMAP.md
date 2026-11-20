@@ -52,7 +52,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    above other windows.
 3. **Keychain edge cases.** The keychain store exists; what is left is a
    Windows credential-manager test pass and a locked-session error message.
-4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
+4. **Mobile follow-ups.** The capture surface exists; what is left is a service
+   worker for a true offline install, and the separate read token the spec asks
+   for before a phone may read the vault.
 5. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.
 
