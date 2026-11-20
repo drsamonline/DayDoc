@@ -62,7 +62,7 @@ Five modules arrived after the first pass. Reviewed the same way.
 | 15 | High | `calendar::parse` sliced the `DTSTART` value by byte index (`&value[..4]`), so an `.ics` containing non-ASCII in a date — a Devanagari or fullwidth date, a malformed file — would panic the parser. | `src/calendar.rs` — `DTSTART` branch | **Fixed** — takes characters, checks they are all ASCII digits, skips the value otherwise; a test parses a Devanagari date and a truncated one |
 | 16 | Medium | `link::suggest_all` embedded every note once *per comparison*, which is quadratic in the vault: a thousand notes meant a million hash passes. | `src/link.rs` — `suggest_for` called per note | **Fixed** — vectors are computed once per run and passed into the comparison |
 | 17 | Medium | `ledger::cards` scanned the vault twice (citations, then the ledger), and `stats` and `handover` added their own scans on top. | `src/ledger.rs` — `cards()` | **Fixed** — `cards_from(&notes)` reuses the caller's scan; `stats` and `handover` now pass theirs |
-| 18 | Low | The mobile capture endpoint answers 500 when the vault refuses a write (read-only vault), which reads as a server fault rather than a policy. | `src/mobile.rs` — `capture_handler` | **Open** — should be 403 with the reason |
+| 18 | Low | The mobile capture endpoint answered 500 when the vault refused a write (read-only vault), which reads as a server fault rather than a policy. | `src/mobile.rs` — `capture_handler` | **Fixed** — 403 with the reason; a test captures against a read-only vault |
 | 19 | Low | The mobile token is compared in constant time but nothing rate-limits attempts, so a LAN attacker can guess. | `src/mobile.rs` | **Accepted** — "no rate limiter" is a stated design choice; the token is 32 bytes of randomness |
 
 What held up in the new code: the read endpoints require a *different* token from
@@ -85,5 +85,6 @@ Unblock conditions for a tagged release:
    `--force`.
 4. A human opens the window once and confirms it renders. **Still open.**
 
-All findings are closed except 9, which is recorded as accepted with the index as
-its remedy.
+All findings are closed except two, both recorded as accepted: the absence of a
+rate limiter on the mobile token, and the repeated scans whose remedy is the
+index.

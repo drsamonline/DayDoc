@@ -101,7 +101,8 @@ History is never edited.
   id stays in the index and a warning lands in `_meta/warnings/`.
 - **`--json` everywhere it helps.** `decisions`, `search`, `ask`, `stale`,
   `status`, `lint`, `meeting`, `import`, `sop`, `cluster`, `handover`, `wrap`,
-  `digest` and `config show`.
+  `digest`, `config show`, `capture`, `accept`, `reject`, `verify`, `reindex`,
+  `check`, `link`, `calendar` and `export`'s sibling `stats`.
 - **A watcher for external edits.** Edit the vault in VS Code or Obsidian and
   `daydoc watch` reindexes on a debounce and commits on a timer; our own
   bookkeeping and `.git` never re-trigger it.

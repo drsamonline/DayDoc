@@ -99,6 +99,9 @@ struct CaptureCmd {
     #[argh(switch)]
     /// show what would happen, write nothing
     preview: bool,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -150,6 +153,9 @@ struct AcceptCmd {
     #[argh(positional)]
     /// decision reference, DR-NNNN
     reference: String,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -159,6 +165,9 @@ struct RejectCmd {
     #[argh(positional)]
     /// decision reference, DR-NNNN
     reference: String,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -243,6 +252,9 @@ struct VerifyCmd {
     #[argh(positional)]
     /// vault-relative path of the note
     path: String,
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -542,7 +554,11 @@ struct WatchCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "reindex")]
 /// rebuild the search index from the vault
-struct ReindexCmd {}
+struct ReindexCmd {
+    #[argh(switch)]
+    /// print json
+    json: bool,
+}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "backup")]
@@ -559,7 +575,11 @@ struct BackupCmd {
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "check")]
 /// identity check plus trash purge in one pass
-struct CheckCmd {}
+struct CheckCmd {
+    #[argh(switch)]
+    /// print json
+    json: bool,
+}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "import")]
@@ -828,6 +848,15 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 Some(kind) => capture::capture_as(&vault, &text, parse_kind(kind)?)?,
                 None => capture::capture(&vault, &text)?,
             };
+            if cmd.json {
+                print_json(&serde_json::json!({
+                    "path": outcome.rel_path,
+                    "type": outcome.note_type.as_str(),
+                    "confidence": outcome.confidence,
+                    "routed_to_inbox": outcome.routed_to_inbox,
+                }));
+                return Ok(ExitCode::SUCCESS);
+            }
             println!("{}", outcome.describe());
             Ok(ExitCode::SUCCESS)
         }
@@ -953,6 +982,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Accept(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let note = ledger::accept(&vault, &cmd.reference)?;
+            if cmd.json {
+                print_json(&ledger::card(&note, &ledger::citation_counts(&vault)?));
+                return Ok(ExitCode::SUCCESS);
+            }
             println!(
                 "{} is now {}",
                 note.frontmatter.decision_id.as_deref().unwrap_or("?"),
@@ -964,6 +997,10 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Reject(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let note = ledger::reject(&vault, &cmd.reference)?;
+            if cmd.json {
+                print_json(&ledger::card(&note, &ledger::citation_counts(&vault)?));
+                return Ok(ExitCode::SUCCESS);
+            }
             println!(
                 "{} is now {}",
                 note.frontmatter.decision_id.as_deref().unwrap_or("?"),
@@ -1067,6 +1104,13 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
         Sub::Verify(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let note = stale::reverify(&vault, &cmd.path)?;
+            if cmd.json {
+                print_json(&serde_json::json!({
+                    "path": note.rel_path,
+                    "last_verified": note.frontmatter.last_verified,
+                }));
+                return Ok(ExitCode::SUCCESS);
+            }
             println!(
                 "re-verified {} ({})",
                 note.rel_path,
@@ -1503,9 +1547,13 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Sub::Reindex(_) => {
+        Sub::Reindex(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let report = index::reindex(&vault)?;
+            if cmd.json {
+                print_json(&report);
+                return Ok(ExitCode::SUCCESS);
+            }
             print!("{}", report.render());
             Ok(ExitCode::SUCCESS)
         }
@@ -1531,10 +1579,17 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
 
-        Sub::Check(_) => {
+        Sub::Check(cmd) => {
             let vault = open_vault(explicit, read_only)?;
             let changes = index::check_identity(&vault)?;
             let purged = vault.purge_trash()?;
+            if cmd.json {
+                print_json(&serde_json::json!({
+                    "identities_changed": changes,
+                    "trash_purged": purged,
+                }));
+                return Ok(ExitCode::SUCCESS);
+            }
             if changes.is_empty() {
                 println!("note identities stable");
             } else {

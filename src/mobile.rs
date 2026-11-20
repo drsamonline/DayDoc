@@ -94,6 +94,10 @@ async fn capture_handler(
             }),
         )
             .into_response(),
+        // A refusal to write is a policy answer, not a server fault.
+        Err(err @ crate::error::DayDocError::ReadOnly(_)) => {
+            error(StatusCode::FORBIDDEN, &err.to_string())
+        }
         Err(err) => error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     }
 }
@@ -382,6 +386,25 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn a_read_only_vault_answers_forbidden_not_server_error() {
+        let mut vault = crate::vault::test_support::temp_vault();
+        vault.config_mut().read_only_vault = true;
+        let response = app(vault)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/capture")
+                    .header("content-type", "application/json")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::from(r#"{"text":"we decided to adopt okta"}"#))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

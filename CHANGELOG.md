@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `--json` on `capture`, `accept`, `reject`, `verify`, `reindex` and `check`, so
+  every command a script would call can be parsed.
 - `daydoc calendar` — a read-only `.ics` signal: notes on an event's day that
   share a meaningful word with its title, with accept writing the project tag.
 - `daydoc mobile` — a capture-only page for a phone on the same network, bearer

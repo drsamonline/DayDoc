@@ -727,3 +727,29 @@ fn calendar_is_off_until_enabled() {
     let err = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(err.contains("calendar signal is off"), "{err}");
 }
+
+#[test]
+fn action_commands_emit_json() {
+    let sandbox = Sandbox::new("action-json");
+    sandbox.ok(&["init", sandbox.vault().to_str().unwrap()]);
+
+    let out = sandbox.ok(&["capture", "we decided to adopt okta for sso", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("capture json");
+    assert_eq!(parsed["path"], "decisions/DR-0001.md");
+    assert_eq!(parsed["routed_to_inbox"], false);
+
+    let out = sandbox.ok(&["accept", "DR-0001", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("accept json");
+    assert_eq!(parsed["status"], "accepted");
+
+    let out = sandbox.ok(&["reject", "DR-0001", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("reject json");
+    assert_eq!(parsed["status"], "accepted", "an accepted decision cannot be rejected");
+
+    let out = sandbox.ok(&["reindex", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("reindex json");
+    assert_eq!(parsed["indexed"], 1);
+
+    let out = sandbox.ok(&["check", "--json"]);
+    serde_json::from_str::<serde_json::Value>(&out).expect("check json");
+}
