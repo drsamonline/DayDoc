@@ -40,6 +40,8 @@ pub mod stats;
 pub mod sync;
 pub mod summarize;
 pub mod types;
+#[cfg(feature = "ui")]
+pub mod ui;
 pub mod vault;
 pub mod watch;
 

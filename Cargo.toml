@@ -16,14 +16,16 @@ name = "daydoc"
 path = "src/main.rs"
 
 [features]
-default = ["git"]
+default = ["git", "ui"]
 git = ["dep:git2"]
+ui = ["dep:eframe"]
 
 [dependencies]
 anyhow = "1"
 argh = "0.1"
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+eframe = { version = "0.29", optional = true }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 git2 = { version = "0.20", default-features = false, optional = true }
 notify = { version = "6", default-features = false }

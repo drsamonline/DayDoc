@@ -60,6 +60,7 @@ enum Sub {
     Lint(LintCmd),
     Sync(SyncCmd),
     Reindex(ReindexCmd),
+    Ui(UiCmd),
     Watch(WatchCmd),
     Chat(ChatCmd),
     Cluster(ClusterCmd),
@@ -441,6 +442,11 @@ struct LintCmd {
     /// print json instead of lines
     json: bool,
 }
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "ui")]
+/// open the desktop window
+struct UiCmd {}
 
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "chat")]
@@ -1174,6 +1180,22 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             let answer = llm::ask_with(&vault, &cmd.question, k, &llm::HttpTransport)?;
             println!("{answer}");
             Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Ui(_) => {
+            let vault = open_vault(explicit, read_only)?;
+            #[cfg(feature = "ui")]
+            {
+                daydoc::ui::run(vault)?;
+                Ok(ExitCode::SUCCESS)
+            }
+            #[cfg(not(feature = "ui"))]
+            {
+                let _ = vault;
+                Err(DayDocError::Config(
+                    "this build has no window (feature \"ui\" is off)".to_string(),
+                ))
+            }
         }
 
         Sub::Watch(cmd) => {

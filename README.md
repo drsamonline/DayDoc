@@ -158,6 +158,7 @@ ask         time-anchored answer as a card
 stale       every stale or contradicting note
 verify      re-verify a note
 archive     move a note to _archive/YYYY/
+ui          open the desktop window
 chat        ask the optional llm (off by default, --preview shows the payload)
 stats       vault counts, entities and dates
 export      write a period as one self-contained html file
@@ -186,6 +187,17 @@ status      vault counts and open threads
 
 Not chosen yet. Add a `LICENSE` file and the matching `license` field in
 `Cargo.toml` before publishing binaries.
+
+## The window
+
+`daydoc ui` opens the shell: capture with a live classification preview,
+the ledger as cards, search, stale notes with a re-verify button, and vault
+statistics. It is a view over the same library as the CLI, so nothing exists in
+the window that is not in the vault.
+
+Two limits, stated plainly: the bundled fonts cover Latin script only, so Indic
+text needs a font added before it renders correctly; and the shell has no tray
+icon or global hotkey yet — those need platform code beyond the window itself.
 
 ## Packaging
 

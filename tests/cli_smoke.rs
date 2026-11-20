@@ -547,3 +547,16 @@ fn an_encrypted_backup_can_be_restored() {
     assert_contains(&out, "decrypted");
     assert!(dest.join("decisions/DR-0001.md").exists());
 }
+
+#[test]
+fn ui_help_is_available() {
+    // Opening a window in CI is not possible; the flag surface is what is checked.
+    let sandbox = Sandbox::new("ui");
+    let output = sandbox.run(&["ui", "--help"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(text.contains("ui"), "no ui help: {text}");
+}

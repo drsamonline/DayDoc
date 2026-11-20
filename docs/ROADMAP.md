@@ -19,6 +19,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Encrypted backups (AES-256-GCM), restore, and a key store with a `0600` file
 - Optional LLM: top-k retrieval, send-content lock, `--preview`, provider request
   shapes for OpenAI-compatible, Anthropic and Gemini
+- Desktop shell: capture, decisions, search, stale, status over the library
 - Watcher: debounced reindex plus timed commit for external edits
 - Structured `--json` for handover, wrap and digest
 - Lint: ids, types, citations, links, attachments
@@ -39,9 +40,9 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
    auto-accepted) and fuzzy SOP step matching ride on it.
 2. **LLM follow-ups.** Key in the OS keychain (`keyring`), a chat panel in the
    shell, and write actions behind an Approve card.
-3. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
-   `Ctrl+Shift+K`, morning plan on `Ctrl+Shift+M`, tray badge for stale notes
-   and the re-verify entry point.
+3. **Shell follow-ups.** Tray icon and global hotkeys (`Ctrl+Shift+Space`,
+   `Ctrl+Shift+K`, `Ctrl+Shift+M`), an Indic-capable font bundle, and the
+   capture overlay that floats above other windows.
 3. **OS keychain.** Move the key store from a `0600` file to the platform
    keychain behind the existing `KeyStore` trait.
 4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
