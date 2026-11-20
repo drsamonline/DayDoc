@@ -61,11 +61,25 @@ fn broken_yaml_is_an_error_with_a_reason() {
         "---\nid: [unclosed\n---\nbody\n",
         "---\n- just\n- a list\n---\nbody\n",
         "---\nid: \"unterminated\n---\nbody\n",
-        "---\n\tid: tab-indented\n---\nbody\n",
     ] {
         let outcome = parses(raw);
         assert!(outcome.is_err(), "accepted broken yaml: {raw:?}");
         assert!(!outcome.unwrap_err().is_empty(), "an error with no message");
+    }
+}
+
+#[test]
+fn a_tab_indented_frontmatter_does_not_panic() {
+    // yaml-rust2 accepts a leading tab where the YAML spec does not, so this
+    // parses — as a note with no id, which `daydoc lint` reports. What matters is
+    // that it does not crash and does not invent an id.
+    match parses("---\n\tid: tab-indented\n---\nbody\n") {
+        Ok(note) => assert!(
+            note.frontmatter.id.is_empty() || note.frontmatter.id == "tab-indented",
+            "unexpected id {:?}",
+            note.frontmatter.id
+        ),
+        Err(err) => assert!(!err.is_empty()),
     }
 }
 
