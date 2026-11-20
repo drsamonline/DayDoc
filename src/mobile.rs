@@ -43,7 +43,13 @@ pub struct ErrorReply {
 }
 
 fn error(status: StatusCode, message: &str) -> Response {
-    (status, Json(ErrorReply { error: message.to_string() })).into_response()
+    (
+        status,
+        Json(ErrorReply {
+            error: message.to_string(),
+        }),
+    )
+        .into_response()
 }
 
 /// Constant-ish time comparison, so a wrong token does not leak its prefix.
