@@ -450,3 +450,18 @@ fn loop_commands_emit_structured_json() {
     let parsed: serde_json::Value = serde_json::from_str(&out).expect("digest json");
     assert!(parsed["path"].as_str().unwrap_or("").starts_with("daily/digests/"));
 }
+
+#[test]
+fn watch_help_is_available() {
+    // The watch loop blocks by design, so the smoke test only proves the
+    // command is wired up and its flags parse.
+    let sandbox = Sandbox::new("watch");
+    let output = sandbox.run(&["watch", "--help"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(text.contains("watch"), "no watch help: {text}");
+    assert!(text.contains("debounce"), "missing debounce flag: {text}");
+}

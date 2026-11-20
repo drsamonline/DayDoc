@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use argh::FromArgs;
 
@@ -11,7 +12,7 @@ use daydoc::sync;
 use daydoc::types::{DecisionStatus, NoteType};
 use daydoc::{
     attach, backup, capture, cluster, daily, export, handover, index, ledger, lint, meeting, migrate,
-    search, sop, stale, stats, Vault,
+    search, sop, stale, stats, watch, Vault,
 };
 
 #[derive(FromArgs, Debug)]
@@ -57,6 +58,7 @@ enum Sub {
     Lint(LintCmd),
     Sync(SyncCmd),
     Reindex(ReindexCmd),
+    Watch(WatchCmd),
     Cluster(ClusterCmd),
     Attach(AttachCmd),
     Purge(PurgeCmd),
@@ -377,6 +379,18 @@ struct LintCmd {
     #[argh(switch)]
     /// print json instead of lines
     json: bool,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "watch")]
+/// watch the vault: reindex on external edits, commit on a timer
+struct WatchCmd {
+    #[argh(option)]
+    /// debounce window in milliseconds (default: 500)
+    debounce_ms: Option<u64>,
+    #[argh(switch)]
+    /// reindex only, never commit
+    no_commit: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -986,6 +1000,19 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 print!("{}", issue.render());
             }
             println!("\n{} issue(s)", issues.len());
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Sub::Watch(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let mut config = watch::WatchConfig::default();
+            if let Some(ms) = cmd.debounce_ms {
+                config.debounce = Duration::from_millis(ms.max(50));
+            }
+            config.auto_commit = !cmd.no_commit && vault.config().auto_commit;
+            config.commit_interval =
+                Duration::from_secs(vault.config().auto_commit_debounce_secs.max(1));
+            watch::run(&vault, &config)?;
             Ok(ExitCode::SUCCESS)
         }
 

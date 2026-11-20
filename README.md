@@ -93,6 +93,9 @@ History is never edited.
 - **Identity guard.** Change a note's `id` and the file is a new note: the old
   id stays in the index and a warning lands in `_meta/warnings/`.
 - **`--json` on `decisions`, `search`, `stale`, `status` and `lint`.**
+- **A watcher for external edits.** Edit the vault in VS Code or Obsidian and
+  `daydoc watch` reindexes on a debounce and commits on a timer; our own
+  bookkeeping and `.git` never re-trigger it.
 - **An index that heals itself.** Metadata and a SQLite FTS5 table live outside
   the vault; on open, a disagreeing index is rebuilt. Search uses it when it can
   match and falls back to a fuzzy scan when a query is a typo.
@@ -144,6 +147,7 @@ config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
 reindex     rebuild the search index from the vault
+watch       reindex on external edits, commit on a timer
 backup      write a dated .tar.gz and apply 7/4/6 retention
 check       identity check plus trash purge
 import      import an existing Markdown folder (dry-run preview)
@@ -181,6 +185,7 @@ and self-update. See `docs/ROADMAP.md`.
 
 ```
 src/
+  watch.rs        filesystem watcher, debounce, reindex and timed commit
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks
   stats.rs        vault counts and entities

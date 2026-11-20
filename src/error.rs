@@ -43,6 +43,9 @@ pub enum DayDocError {
 
     #[error("git error: {0}")]
     Git(String),
+
+    #[error("watcher error: {0}")]
+    Watch(String),
 }
 
 impl DayDocError {

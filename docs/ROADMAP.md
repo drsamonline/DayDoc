@@ -16,6 +16,7 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 - Git sync: commit-only through `git2`, `.conflict.md` sidecars, no credentials
 - Stats, config show/set, single-file HTML export
 - Release workflow: Linux and Windows archives plus a `.deb` on `v*` tags
+- Watcher: debounced reindex plus timed commit for external edits
 - Structured `--json` for handover, wrap and digest
 - Lint: ids, types, citations, links, attachments
 - Backup: dated `.tar.gz` of the vault, 7/4/6 retention, fail-closed on encryption
@@ -36,14 +37,10 @@ Ordered by what makes the ledger trustworthy, then what makes it pleasant.
 2. **Desktop shell.** egui: capture overlay on `Ctrl+Shift+Space`, search on
    `Ctrl+Shift+K`, morning plan on `Ctrl+Shift+M`, tray badge for stale notes
    and the re-verify entry point.
-3. **Watcher.** `notify-debouncer-full` re-index on external edits (VS Code,
-   Obsidian), with the Windows lock retry already in `vault`.
-4. **Sync on a timer.** The commit path exists; the 300 s debounce belongs to
-   the watcher, which needs the desktop shell.
-5. **Backup encryption.** AES-256-GCM with the key in the OS keychain;
+3. **Backup encryption.** AES-256-GCM with the key in the OS keychain;
    `backup_encrypt = true` refuses to run until this lands.
-6. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
-7. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
+4. **Mobile PWA.** `axum`, capture-only, LAN + token auth, offline queue.
+5. **Packaging.** `cargo-wix` MSI plus portable `.exe`; AppImage plus `.deb`;
    `self_update` from GitHub Releases.
 
 ## Explicitly out of scope

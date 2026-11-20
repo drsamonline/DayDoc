@@ -38,6 +38,7 @@ pub mod sync;
 pub mod summarize;
 pub mod types;
 pub mod vault;
+pub mod watch;
 
 pub use error::{DayDocError, Result};
 pub use vault::Vault;
