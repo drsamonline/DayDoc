@@ -36,11 +36,15 @@ fn top_level_commands() -> Vec<String> {
         if line.starts_with('}') {
             break;
         }
+        // `    Init(InitCmd),` — the command is the part before the parenthesis.
         let trimmed = line.trim().trim_end_matches(',');
-        if let Some(name) = trimmed.strip_suffix('(') {
-            if name.chars().all(|c| c.is_alphanumeric()) && !name.is_empty() {
-                out.push(name.to_ascii_lowercase());
-            }
+        let mut parts = trimmed.split('(');
+        let name = parts.next().unwrap_or("");
+        if parts.next().is_some()
+            && !name.is_empty()
+            && name.chars().all(|c| c.is_alphanumeric())
+        {
+            out.push(name.to_ascii_lowercase());
         }
     }
     out
