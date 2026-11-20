@@ -19,7 +19,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   (2.35) and anything else older than the runner. Found by downloading the
   published archive and running it. The Linux build is now pinned to
   `ubuntu-22.04`, a static `x86_64-unknown-linux-musl` archive is published
-  alongside it, and the `.deb` is built on the same floor.
+  alongside it, and the `.deb` is built on the same floor. CI now runs the release
+  binary inside a `debian:12` container on every push, so the floor cannot creep
+  back up unnoticed.
 
 ## [0.2.0] — 2026-11-20
 

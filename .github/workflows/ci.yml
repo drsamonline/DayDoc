@@ -61,3 +61,28 @@ jobs:
         run: cargo deb
       - name: show what was built
         run: ls -l target/debian/*.deb
+
+  compat:
+    name: runs on an older glibc
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Built where the release is built, then run where the release is *not*
+      # built. 0.2.0 shipped a binary that needed GLIBC_2.43 and nobody noticed
+      # until it was downloaded and started.
+      - name: build the release binary
+        run: cargo build --release
+      - name: run it on debian 12
+        run: |
+          docker run --rm \
+            -v "$PWD/target/release/daydoc:/usr/local/bin/daydoc:ro" \
+            debian:12 \
+            bash -c 'set -e
+              daydoc --help > /dev/null
+              daydoc init /tmp/v > /dev/null
+              daydoc -v /tmp/v capture "we decided to adopt okta for sso" > /dev/null
+              daydoc -v /tmp/v ask "what did we decide about okta" | head -2
+              daydoc -v /tmp/v status | tail -3
+              echo "the release binary runs on debian 12"'
