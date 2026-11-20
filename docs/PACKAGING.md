@@ -16,12 +16,15 @@ a tag cannot ship an untested binary.
 ## Cutting a release
 
 ```bash
-# bump version in Cargo.toml
+# bump version in Cargo.toml and move CHANGELOG [Unreleased] into a new section
 cargo test --all-targets
-git commit -am "release: v0.2.0"
-git tag v0.2.0
+git commit -am "release: v0.3.0"
+git tag v0.3.0
 git push origin main --tags
 ```
+
+`0.2.0` is prepared in `Cargo.toml` and `CHANGELOG.md` and is waiting for its
+tag.
 
 ## Locally
 

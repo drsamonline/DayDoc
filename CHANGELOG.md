@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] — 2026-11-20
+
+Everything since 0.1.0: linking, the calendar signal, the phone surface, and a
+second audit pass.
+
 ### Added
 
 - `--json` on `capture`, `accept`, `reject`, `verify`, `reindex` and `check`, so
@@ -21,6 +28,29 @@ versions follow [Semantic Versioning](https://semver.org/).
   across. The embedding pipeline sits behind one trait; the bundled embedder is a
   deterministic feature hash, so the similarity is vocabulary rather than meaning
   until the model lands.
+
+### Fixed
+
+- `calendar` sliced a date by byte index, so an `.ics` with non-ASCII in it
+  panicked the parser. It now takes characters and skips anything that is not
+  eight ASCII digits.
+- `link` embedded every note once per comparison, which is quadratic; vectors are
+  computed once per run.
+- `ledger::cards` scanned the vault twice, and `stats` and `handover` scanned
+  again on top; they now share one scan.
+- The mobile capture endpoint answered 500 when the vault refused a write; it
+  answers 403.
+- A note with no date in its frontmatter was invisible to the calendar signal; it
+  falls back to the file's modification time.
+- The architecture map listed 13 of 26 modules; `tests/doc_drift.rs` now fails if
+  a module or a command is undocumented.
+
+### Documentation
+
+- `AGENTS.md` — the verification commands and the rules that are not style.
+- `docs/USAGE.md` — ten tasks with the commands that do them.
+- `docs/AUDIT.md` — a second pass over the modules added since 0.1.0.
+- `tests/perf.rs` — budgets on indexing and searching 500 notes.
 
 ## [0.1.0] — 2026-11-20
 
@@ -93,4 +123,5 @@ with no model, no account and no network.
   encryption by default, the `0600` key file protects against other accounts and
   not against you, and the optional model sees what you send it.
 
+[0.2.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.0
 [0.1.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.1.0
