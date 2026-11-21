@@ -86,3 +86,20 @@ jobs:
               daydoc -v /tmp/v ask "what did we decide about okta" | head -2
               daydoc -v /tmp/v status | tail -3
               echo "the release binary runs on debian 12"'
+
+  model:
+    name: the model matches onnxruntime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # 86 MB, downloaded every run. It is the only way to know that the Rust
+      # inference produces the same numbers as the reference, and it is cheap
+      # next to shipping an embedder that quietly disagrees.
+      - name: fetch all-MiniLM-L6-v2
+        run: bash scripts/fetch-model.sh "$PWD/models"
+      - name: compare against the reference
+        run: cargo test --test minilm -- --nocapture
+        env:
+          DAYDOC_MODEL_DIR: ${{ github.workspace }}/models
