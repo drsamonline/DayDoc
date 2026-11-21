@@ -116,18 +116,17 @@ pub fn model_files(vault: &Vault) -> Option<(std::path::PathBuf, std::path::Path
 
 /// The best embedder this vault can use.
 pub enum AnyEmbedder {
+    /// Boxed: the model is large, and the fallback should not pay for it.
     #[cfg(feature = "model")]
-    MiniLm(MiniLm),
+    MiniLm(Box<MiniLm>),
     Hash(HashEmbedder),
 }
 
 impl AnyEmbedder {
     pub fn for_vault(vault: &Vault) -> Result<AnyEmbedder> {
         #[cfg(feature = "model")]
-        {
-            if let Some((model, vocab)) = model_files(vault) {
-                return Ok(AnyEmbedder::MiniLm(MiniLm::load(&model, &vocab)?));
-            }
+        if let Some((model, vocab)) = model_files(vault) {
+            return Ok(AnyEmbedder::MiniLm(Box::new(MiniLm::load(&model, &vocab)?)));
         }
         let _ = vault;
         Ok(AnyEmbedder::Hash(HashEmbedder::default()))

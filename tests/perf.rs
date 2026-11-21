@@ -25,13 +25,13 @@ fn scratch_vault(notes: usize) -> Vault {
                 the pilot runs for thirty days and covers admin tooling, \
                 pricing, and the migration plan for the directory.";
     for index in 0..notes {
-        let folder = if index % 7 == 0 { "decisions" } else { "meetings" };
+        let folder = if index.is_multiple_of(7) { "decisions" } else { "meetings" };
         let path = root.join(folder).join(format!("note-{index:04}.md"));
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dirs");
         let text = format!(
             "---\nid: 01{:024}\ntype: {}\ntitle: Note {index} about okta sso\n---\n{body}\n",
             index,
-            if index % 7 == 0 { "meeting" } else { "meeting" }
+            "meeting"
         );
         std::fs::write(&path, text).expect("write note");
     }

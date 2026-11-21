@@ -161,7 +161,8 @@ mod tests {
         let encoded = vocab.encode("sso", 8);
         assert_eq!(encoded.ids[0], CLS);
         assert_eq!(encoded.ids[1], UNK, "sso is not in the tiny vocabulary");
-        assert_eq!(*encoded.ids.last().expect("sep"), SEP);
+        // Padded to 8, so [SEP] sits at index 2 and the rest is [PAD].
+        assert_eq!(encoded.ids[2], SEP);
         assert_eq!(encoded.ids.len(), 8);
         assert_eq!(encoded.mask, vec![1, 1, 1, 0, 0, 0, 0, 0]);
     }
