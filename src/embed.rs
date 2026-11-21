@@ -333,17 +333,27 @@ impl MiniLm {
             .into_iter()
             .next()
             .ok_or_else(|| DayDocError::Config("the model returned nothing".to_string()))?;
+        // A dynamic-rank view: the output is [1, tokens, 384], and reading it
+        // through the view avoids any question of storage layout.
         let hidden = value
-            .into_tensor::<NdTensor<f32, 3>>()
+            .as_tensor_view::<f32>()
             .ok_or_else(|| DayDocError::Config("the output was not a float tensor".to_string()))?;
-
-        let dims = hidden.size(2);
+        let shape = hidden.shape().to_vec();
+        if shape.len() != 3 {
+            return Err(DayDocError::Config(format!(
+                "expected a 3-dimensional output, got {shape:?}"
+            )));
+        }
+        let dims = shape[2];
         if dims != MINILM_DIMS {
             return Err(DayDocError::Config(format!(
                 "expected {MINILM_DIMS} dimensions, got {dims}"
             )));
         }
-        let tokens = hidden.size(1).min(mask.len());
+        let tokens = shape[1].min(mask.len());
+        let data = hidden
+            .data()
+            .ok_or_else(|| DayDocError::Config("the output was not contiguous".to_string()))?;
 
         // Mean-pool over the tokens the mask keeps, then normalise.
         let mut pooled = vec![0.0f32; dims];
@@ -353,8 +363,12 @@ impl MiniLm {
                 continue;
             }
             counted += 1.0;
+            let start = position * dims;
+            if start + dims > data.len() {
+                break;
+            }
             for (index, value) in pooled.iter_mut().enumerate() {
-                *value += hidden[[0, position, index]];
+                *value += data[start + index];
             }
         }
         if counted > 0.0 {
