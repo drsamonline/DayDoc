@@ -5,8 +5,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.2] — 2026-11-21
+
 ### Added
 
+- **all-MiniLM-L6-v2, verified.** `scripts/fetch-model.sh` downloads the ONNX
+  export and its vocabulary; `daydoc embed` builds 384-dimension vectors through
+  `rten`; `daydoc link` then compares meaning rather than vocabulary. The output
+  is checked against onnxruntime in CI, to 1e-4, and the WordPiece tokenizer
+  against the reference token ids. Without the model, the feature-hash embedder
+  is used and named as such.
 - The morning plan: `Ctrl+Shift+M` opens a Plan view, and what you write goes into
   the `## Plan` section of today's daily note.
 
@@ -141,6 +151,7 @@ with no model, no account and no network.
   encryption by default, the `0600` key file protects against other accounts and
   not against you, and the optional model sees what you send it.
 
+[0.2.2]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.2
 [0.2.1]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.1
 [0.2.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.2.0
 [0.1.0]: https://github.com/drsamonline/DayDoc/releases/tag/v0.1.0
