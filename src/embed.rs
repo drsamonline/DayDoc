@@ -6,10 +6,18 @@
 //! and nothing else — the storage, the ranking and the auto-link suggestions do
 //! not change.
 //!
-//! The bundled `HashEmbedder` is a signed feature-hash bag of words. It is not a
-//! semantic model and is not advertised as one: it finds notes that share
-//! vocabulary, which is what the index already does, so auto-linking is
-//! deliberately *not* enabled on it by default (see `link.rs`).
+//! Two embedders ship:
+//!
+//! - `MiniLm`, when `model.onnx` and `vocab.txt` are present. all-MiniLM-L6-v2
+//!   through `rten`, mean-pooled and L2-normalised, 384 dimensions. This one
+//!   understands meaning, and its output is checked against onnxruntime in
+//!   `tests/minilm.rs`.
+//! - `HashEmbedder`, the fallback: a signed feature-hash bag of words. It finds
+//!   notes that share vocabulary, which the index already does, so it says so
+//!   (`is_semantic` is false) and the UI never calls it semantic.
+//!
+//! The model is not bundled: `scripts/fetch-model.sh` downloads it, and
+//! `daydoc embed` reports which one is in use.
 
 use rusqlite::{params, Connection};
 
@@ -17,6 +25,8 @@ use crate::error::{DayDocError, Result};
 use crate::vault::Vault;
 
 pub const DEFAULT_DIMS: usize = 256;
+pub const MINILM_DIMS: usize = 384;
+pub const MINILM_MAX_TOKENS: usize = 128;
 pub const MIN_SIMILARITY: f32 = 0.55;
 
 const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS note_vectors (
@@ -79,6 +89,82 @@ impl Embedder for HashEmbedder {
         }
         normalise(&mut vector);
         vector
+    }
+}
+
+/// Where the model files are looked for: `embed_model_dir`, else `<state>/models`.
+pub fn model_dir(vault: &Vault) -> std::path::PathBuf {
+    let configured = vault.config().embed_model_dir.trim();
+    if configured.is_empty() {
+        vault.state_dir().join("models")
+    } else {
+        std::path::PathBuf::from(configured)
+    }
+}
+
+/// The two files the model needs, if both are there.
+pub fn model_files(vault: &Vault) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+    let dir = model_dir(vault);
+    let model = dir.join("model.onnx");
+    let vocab = dir.join("vocab.txt");
+    if model.is_file() && vocab.is_file() {
+        Some((model, vocab))
+    } else {
+        None
+    }
+}
+
+/// The best embedder this vault can use.
+pub enum AnyEmbedder {
+    #[cfg(feature = "model")]
+    MiniLm(MiniLm),
+    Hash(HashEmbedder),
+}
+
+impl AnyEmbedder {
+    pub fn for_vault(vault: &Vault) -> Result<AnyEmbedder> {
+        #[cfg(feature = "model")]
+        {
+            if let Some((model, vocab)) = model_files(vault) {
+                return Ok(AnyEmbedder::MiniLm(MiniLm::load(&model, &vocab)?));
+            }
+        }
+        let _ = vault;
+        Ok(AnyEmbedder::Hash(HashEmbedder::default()))
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            #[cfg(feature = "model")]
+            AnyEmbedder::MiniLm(_) => "all-MiniLM-L6-v2",
+            AnyEmbedder::Hash(_) => "feature hash (no model installed)",
+        }
+    }
+}
+
+impl Embedder for AnyEmbedder {
+    fn dimensions(&self) -> usize {
+        match self {
+            #[cfg(feature = "model")]
+            AnyEmbedder::MiniLm(inner) => inner.dimensions(),
+            AnyEmbedder::Hash(inner) => inner.dimensions(),
+        }
+    }
+
+    fn is_semantic(&self) -> bool {
+        match self {
+            #[cfg(feature = "model")]
+            AnyEmbedder::MiniLm(inner) => inner.is_semantic(),
+            AnyEmbedder::Hash(inner) => inner.is_semantic(),
+        }
+    }
+
+    fn embed(&self, text: &str) -> Vec<f32> {
+        match self {
+            #[cfg(feature = "model")]
+            AnyEmbedder::MiniLm(inner) => inner.embed(text),
+            AnyEmbedder::Hash(inner) => inner.embed(text),
+        }
     }
 }
 
@@ -181,6 +267,127 @@ pub fn rebuild<E: Embedder>(vault: &Vault, embedder: &E) -> Result<usize> {
         tx.commit().map_err(DayDocError::Db)?;
     }
     Ok(count)
+}
+
+/// all-MiniLM-L6-v2 through `rten`.
+#[cfg(feature = "model")]
+pub struct MiniLm {
+    model: rten::Model,
+    vocab: crate::tokenizer::Vocab,
+    input_ids: rten::NodeId,
+    attention_mask: rten::NodeId,
+    token_type_ids: rten::NodeId,
+    output: rten::NodeId,
+}
+
+#[cfg(feature = "model")]
+impl MiniLm {
+    pub fn load(model_path: &std::path::Path, vocab_path: &std::path::Path) -> Result<MiniLm> {
+        let model = rten::Model::load_file(model_path).map_err(|err| {
+            DayDocError::Config(format!(
+                "could not load the model at {}: {err}",
+                model_path.display()
+            ))
+        })?;
+        let vocab = crate::tokenizer::Vocab::load(vocab_path)?;
+        let node = |name: &str| {
+            model.node_id(name).map_err(|err| {
+                DayDocError::Config(format!("the model has no input called {name}: {err}"))
+            })
+        };
+        Ok(MiniLm {
+            input_ids: node("input_ids")?,
+            attention_mask: node("attention_mask")?,
+            token_type_ids: node("token_type_ids")?,
+            output: node("last_hidden_state")?,
+            model,
+            vocab,
+        })
+    }
+
+    /// Fails loudly, for callers that can report it.
+    pub fn embed_checked(&self, text: &str) -> Result<Vec<f32>> {
+        use rten_tensor::NdTensor;
+
+        let encoded = self.vocab.encode(text, MINILM_MAX_TOKENS);
+        let mask = encoded.mask.clone();
+        let shape = [1usize, MINILM_MAX_TOKENS];
+        let ids = NdTensor::<i32, 2>::from_data(shape, encoded.ids);
+        let attention = NdTensor::<i32, 2>::from_data(shape, encoded.mask);
+        let types = NdTensor::<i32, 2>::zeros(shape);
+
+        let outputs = self
+            .model
+            .run(
+                vec![
+                    (self.input_ids, ids.into()),
+                    (self.attention_mask, attention.into()),
+                    (self.token_type_ids, types.into()),
+                ],
+                &[self.output],
+                None,
+            )
+            .map_err(|err| DayDocError::Config(format!("the model failed: {err}")))?;
+
+        let value = outputs
+            .into_iter()
+            .next()
+            .ok_or_else(|| DayDocError::Config("the model returned nothing".to_string()))?;
+        let tensor = value
+            .into_tensor::<rten_tensor::Tensor<f32>>()
+            .ok_or_else(|| DayDocError::Config("the output was not a float tensor".to_string()))?;
+        let dims = tensor.shape().last().copied().unwrap_or(0);
+        if dims != MINILM_DIMS {
+            return Err(DayDocError::Config(format!(
+                "expected {MINILM_DIMS} dimensions, got {dims}"
+            )));
+        }
+        let data = tensor
+            .data()
+            .ok_or_else(|| DayDocError::Config("the output was not contiguous".to_string()))?;
+
+        // Mean-pool over the tokens the mask keeps, then normalise.
+        let mut pooled = vec![0.0f32; dims];
+        let mut counted = 0.0f32;
+        for (position, keep) in mask.iter().enumerate() {
+            if *keep == 0 {
+                continue;
+            }
+            let start = position * dims;
+            if start + dims > data.len() {
+                break;
+            }
+            counted += 1.0;
+            for (index, value) in data[start..start + dims].iter().enumerate() {
+                pooled[index] += value;
+            }
+        }
+        if counted > 0.0 {
+            for value in pooled.iter_mut() {
+                *value /= counted;
+            }
+        }
+        normalise(&mut pooled);
+        Ok(pooled)
+    }
+}
+
+#[cfg(feature = "model")]
+impl Embedder for MiniLm {
+    fn dimensions(&self) -> usize {
+        MINILM_DIMS
+    }
+
+    fn is_semantic(&self) -> bool {
+        true
+    }
+
+    fn embed(&self, text: &str) -> Vec<f32> {
+        // The trait is infallible because ranking callers have nowhere to put an
+        // error; a failure here is reported by `embed_checked` and by
+        // `daydoc embed`, not swallowed silently by them.
+        self.embed_checked(text).unwrap_or_else(|_| vec![0.0; MINILM_DIMS])
+    }
 }
 
 #[cfg(test)]

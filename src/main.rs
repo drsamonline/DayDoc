@@ -61,6 +61,7 @@ enum Sub {
     Calendar(CalendarCmd),
     Lint(LintCmd),
     Mobile(MobileCmd),
+    Embed(EmbedCmd),
     Link(LinkCmd),
     Sync(SyncCmd),
     Reindex(ReindexCmd),
@@ -351,6 +352,15 @@ struct MobileCmd {
     #[argh(option)]
     /// address to bind (default: 0.0.0.0:7373)
     addr: Option<String>,
+}
+
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "embed")]
+/// build the note vectors with whichever embedder is installed
+struct EmbedCmd {
+    #[argh(switch)]
+    /// print json
+    json: bool,
 }
 
 #[derive(FromArgs, Debug)]
@@ -1399,9 +1409,35 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
             }
         }
 
+        Sub::Embed(cmd) => {
+            let vault = open_vault(explicit, read_only)?;
+            let embedder = embed::AnyEmbedder::for_vault(&vault)?;
+            let count = embed::rebuild(&vault, &embedder)?;
+            if cmd.json {
+                print_json(&serde_json::json!({
+                    "embedder": embedder.name(),
+                    "dimensions": embed::Embedder::dimensions(&embedder),
+                    "semantic": embedder.is_semantic(),
+                    "notes": count,
+                }));
+                return Ok(ExitCode::SUCCESS);
+            }
+            println!(
+                "{count} note(s) embedded with {} ({} dimensions{})",
+                embedder.name(),
+                embed::Embedder::dimensions(&embedder),
+                if embedder.is_semantic() {
+                    ", semantic"
+                } else {
+                    ""
+                }
+            );
+            Ok(ExitCode::SUCCESS)
+        }
+
         Sub::Link(cmd) => {
             let vault = open_vault(explicit, read_only)?;
-            let embedder = embed::HashEmbedder::default();
+            let embedder = embed::AnyEmbedder::for_vault(&vault)?;
             let limit = cmd.limit.unwrap_or(3);
             let min_score = cmd.min_score.unwrap_or_else(link::default_min_score);
 
@@ -1458,12 +1494,12 @@ fn run(args: TopLevel) -> daydoc::Result<ExitCode> {
                 }
             }
             println!(
-                "\n{} — no embedding model is bundled, so these are vocabulary matches, \
-                 not meaning. Dropping in the model changes nothing but src/embed.rs.",
+                "\nmatcher: {}{}",
+                embedder.name(),
                 if embedder.is_semantic() {
-                    "semantic"
+                    ""
                 } else {
-                    "vocabulary only"
+                    " — vocabulary, not meaning. Run scripts/fetch-model.sh for the real thing."
                 }
             );
             Ok(ExitCode::SUCCESS)

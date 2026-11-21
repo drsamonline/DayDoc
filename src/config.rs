@@ -56,6 +56,8 @@ pub struct Config {
     pub llm_send_content: bool,
     pub summarizer: String,
     pub min_classification_confidence: f32,
+    /// Where `model.onnx` and `vocab.txt` live. Empty means `<state>/models`.
+    pub embed_model_dir: String,
     pub auto_commit: bool,
     pub auto_commit_debounce_secs: u64,
     pub weekly_digest: bool,
@@ -79,6 +81,7 @@ impl Default for Config {
             llm_send_content: false,
             summarizer: "extractive".to_string(),
             min_classification_confidence: 0.7,
+            embed_model_dir: String::new(),
             auto_commit: true,
             auto_commit_debounce_secs: 300,
             weekly_digest: true,
@@ -172,11 +175,12 @@ impl Config {
     }
 
     /// Keys `daydoc config set` understands.
-    pub const SETTABLE: [&'static str; 17] = [
+    pub const SETTABLE: [&'static str; 18] = [
         "llm_mode",
         "llm_provider",
         "llm_send_content",
         "min_classification_confidence",
+        "embed_model_dir",
         "auto_commit",
         "auto_commit_debounce_secs",
         "weekly_digest",
@@ -225,6 +229,10 @@ impl Config {
             "llm_send_content" => {
                 self.llm_send_content = boolean(value)?;
                 Ok(self.llm_send_content.to_string())
+            }
+            "embed_model_dir" => {
+                self.embed_model_dir = value.to_string();
+                Ok(self.embed_model_dir.clone())
             }
             "min_classification_confidence" => {
                 self.min_classification_confidence = value.parse::<f32>().map_err(|_| {

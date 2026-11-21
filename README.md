@@ -115,6 +115,12 @@ History is never edited.
 - **Export a period.** One self-contained HTML file — no scripts, no external
   requests, note bodies escaped and shown as text.
 - **Config without an editor.** `daydoc config set stale.sop 30`.
+- **Embeddings, optional.** `scripts/fetch-model.sh` downloads all-MiniLM-L6-v2
+  (86 MB, ONNX) and its vocabulary into the state directory; `daydoc embed` then
+  builds 384-dimension vectors through `rten`, mean-pooled and normalised. The
+  output is checked against onnxruntime in `tests/minilm.rs`, down to the token
+  ids. Without the model, DayDoc falls back to a feature-hash embedder and says
+  so.
 - **Auto-link suggestions, never automatic.** `daydoc link` proposes links from a
   shared person or project plus embedding similarity; accepting one writes the
   link and carries the entities across, and never edits the body. No embedding
@@ -178,6 +184,7 @@ export      write a period as one self-contained html file
 config      show or change daydoc.toml
 sync        commit the vault to git (never pushes)
 lint        report vault problems: ids, links, citations, assets
+embed       build note vectors with whichever embedder is installed
 link        suggest links between notes, and accept one
 calendar    suggest project tags from an .ics calendar (read-only)
 mobile      serve the capture-only phone page on the local network
@@ -313,7 +320,8 @@ src/
   secret.rs       key storage: environment, 0600 file, keychain-ready trait
   crypto.rs       AES-256-GCM for encrypted backups
   watch.rs        filesystem watcher, debounce, reindex and timed commit
-  embed.rs        embedding pipeline behind one trait (model swap point)
+  embed.rs        embedding pipeline: MiniLM through rten, or a feature hash
+  tokenizer.rs    BERT WordPiece, checked against the reference token ids
   link.rs         auto-link suggestions and accept
   index.rs        SQLite metadata + FTS5 index, note identity guard
   lint.rs         vault health checks

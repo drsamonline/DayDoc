@@ -2,7 +2,7 @@
 name = "daydoc"
 version = "0.2.1"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.94"
 description = "Decision-first office notes. Notes are evidence; decisions are the record."
 license = "MIT"
 repository = "https://github.com/drsamonline/DayDoc"
@@ -17,11 +17,12 @@ name = "daydoc"
 path = "src/main.rs"
 
 [features]
-default = ["git", "ui", "keychain", "mobile"]
+default = ["git", "ui", "keychain", "mobile", "model"]
 git = ["dep:git2"]
 ui = ["dep:eframe", "dep:global-hotkey"]
 mobile = ["dep:axum", "dep:tokio"]
 keychain = ["dep:keyring"]
+model = ["dep:rten", "dep:rten-tensor"]
 
 [dependencies]
 anyhow = "1"
@@ -36,6 +37,8 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 git2 = { version = "0.20", default-features = false, optional = true }
 notify = { version = "6", default-features = false }
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+rten = { version = "0.27", default-features = false, features = ["mmap"], optional = true }
+rten-tensor = { version = "0.27", default-features = false, optional = true }
 ring = { version = "0.17", default-features = false, features = ["alloc", "std"] }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 rusqlite = { version = "0.31", features = ["bundled"] }

@@ -44,6 +44,7 @@ pub mod stats;
 #[cfg(feature = "git")]
 pub mod sync;
 pub mod summarize;
+pub mod tokenizer;
 pub mod types;
 #[cfg(feature = "ui")]
 pub mod ui;
