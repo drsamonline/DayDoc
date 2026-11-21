@@ -37,7 +37,9 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 git2 = { version = "0.20", default-features = false, optional = true }
 notify = { version = "6", default-features = false }
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
-rten = { version = "0.27", default-features = false, features = ["mmap"], optional = true }
+# `onnx_format` is the loader; without it rten reports "built without support
+# for this model format", which is exactly what CI said the first time.
+rten = { version = "0.27", default-features = false, features = ["onnx_format", "mmap"], optional = true }
 rten-tensor = { version = "0.27", default-features = false, optional = true }
 ring = { version = "0.17", default-features = false, features = ["alloc", "std"] }
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
