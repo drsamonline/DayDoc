@@ -52,7 +52,8 @@ vault, so a synced vault never carries half-finished writes.
 | `stale` | Age by type + contradiction (superseded decision, renamed project, departed owner) |
 | `search` | Fuzzy token match with edit distance, filters, decision cards, `ask` |
 | `index` | SQLite metadata + FTS5 candidates, file-count stamp, note identity guard |
-| `embed` | The `Embedder` trait, a deterministic feature-hash embedder, cosine, vector store |
+| `embed` | The `Embedder` trait, all-MiniLM-L6-v2 through `rten`, a feature-hash fallback, cosine, vector store |
+| `tokenizer` | BERT WordPiece, checked against the reference token ids from onnxruntime |
 | `link` | Auto-link suggestions from a shared entity or similarity; accept writes links |
 | `summarize` | TextRank extractive summary |
 | `handover` | Period packet: did, open, decided, who to ask, stale |
