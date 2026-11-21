@@ -668,7 +668,8 @@ fn link_suggests_then_accepts() {
     sandbox.ok(&["capture", "--text", "payroll statutory filing interest penalty challan"]);
 
     let out = sandbox.ok(&["link"]);
-    assert_contains(&out, "vocabulary only");
+    assert_contains(&out, "matcher: feature hash");
+    assert_contains(&out, "vocabulary, not meaning");
     assert_contains(&out, "shared vocabulary");
 
     // Suggestions write nothing.
