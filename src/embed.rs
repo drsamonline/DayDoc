@@ -307,7 +307,7 @@ impl MiniLm {
 
     /// Fails loudly, for callers that can report it.
     pub fn embed_checked(&self, text: &str) -> Result<Vec<f32>> {
-        use rten_tensor::NdTensor;
+        use rten_tensor::{Layout, NdTensor};
 
         let encoded = self.vocab.encode(text, MINILM_MAX_TOKENS);
         let mask = encoded.mask.clone();
@@ -333,33 +333,28 @@ impl MiniLm {
             .into_iter()
             .next()
             .ok_or_else(|| DayDocError::Config("the model returned nothing".to_string()))?;
-        let tensor = value
-            .into_tensor::<rten_tensor::Tensor<f32>>()
+        let hidden = value
+            .into_tensor::<NdTensor<f32, 3>>()
             .ok_or_else(|| DayDocError::Config("the output was not a float tensor".to_string()))?;
-        let dims = tensor.shape().last().copied().unwrap_or(0);
+
+        let dims = hidden.size(2);
         if dims != MINILM_DIMS {
             return Err(DayDocError::Config(format!(
                 "expected {MINILM_DIMS} dimensions, got {dims}"
             )));
         }
-        let data = tensor
-            .data()
-            .ok_or_else(|| DayDocError::Config("the output was not contiguous".to_string()))?;
+        let tokens = hidden.size(1).min(mask.len());
 
         // Mean-pool over the tokens the mask keeps, then normalise.
         let mut pooled = vec![0.0f32; dims];
         let mut counted = 0.0f32;
-        for (position, keep) in mask.iter().enumerate() {
-            if *keep == 0 {
+        for position in 0..tokens {
+            if mask[position] == 0 {
                 continue;
             }
-            let start = position * dims;
-            if start + dims > data.len() {
-                break;
-            }
             counted += 1.0;
-            for (index, value) in data[start..start + dims].iter().enumerate() {
-                pooled[index] += value;
+            for (index, value) in pooled.iter_mut().enumerate() {
+                *value += hidden[[0, position, index]];
             }
         }
         if counted > 0.0 {
